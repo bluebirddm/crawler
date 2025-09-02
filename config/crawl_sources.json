@@ -1,0 +1,46 @@
+{
+  "sources": [
+    {
+      "name": "技术博客",
+      "enabled": true,
+      "urls": [
+        "https://www.infoq.cn/",
+        "https://segmentfault.com/",
+        "https://juejin.cn/"
+      ],
+      "spider": "general",
+      "category": "科技"
+    },
+    {
+      "name": "新闻网站",
+      "enabled": true,
+      "urls": [
+        "https://www.36kr.com/",
+        "https://www.ifanr.com/"
+      ],
+      "spider": "general",
+      "category": "综合"
+    },
+    {
+      "name": "财经资讯",
+      "enabled": false,
+      "urls": [
+        "https://finance.sina.com.cn/",
+        "https://www.eastmoney.com/"
+      ],
+      "spider": "general",
+      "category": "财经"
+    }
+  ],
+  "schedule": {
+    "hourly": {
+      "enabled": true,
+      "categories": ["科技", "综合"]
+    },
+    "daily": {
+      "enabled": true,
+      "time": "02:00",
+      "categories": ["财经", "教育"]
+    }
+  }
+}
