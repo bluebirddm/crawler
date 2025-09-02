@@ -1,4 +1,4 @@
-.PHONY: install test run clean docker-build docker-up docker-down
+.PHONY: install test run clean docker-build docker-up docker-down logs-api logs-worker logs-beat logs-flower logs-scrapy logs-uvicorn logs-all logs-clean logs-size
 
 # 安装依赖
 install:
@@ -69,6 +69,36 @@ init-db:
 create-db:
 	PGPASSWORD=123456 /Library/PostgreSQL/17/bin/createdb -h 127.0.0.1 -p 5432 -U postgres crawler_db
 
+# 日志查看命令
+logs-api:
+	tail -f logs/api.log
+
+logs-worker:
+	tail -f logs/worker.log
+
+logs-beat:
+	tail -f logs/beat.log
+
+logs-flower:
+	tail -f logs/flower.log
+
+logs-scrapy:
+	tail -f logs/scrapy.log
+
+logs-uvicorn:
+	tail -f logs/uvicorn.log
+
+logs-all:
+	tail -f logs/*.log
+
+logs-clean:
+	rm -f logs/*.log
+	@echo "All log files cleaned"
+
+logs-size:
+	@echo "Log files size:"
+	@ls -lh logs/*.log 2>/dev/null || echo "No log files found"
+
 # 帮助
 help:
 	@echo "Available commands:"
@@ -85,3 +115,14 @@ help:
 	@echo "  make format      - Format code"
 	@echo "  make lint        - Check code quality"
 	@echo "  make init-db     - Initialize database tables"
+	@echo ""
+	@echo "Log management:"
+	@echo "  make logs-api     - View API logs"
+	@echo "  make logs-worker  - View Celery worker logs"
+	@echo "  make logs-beat    - View Celery beat logs"
+	@echo "  make logs-flower  - View Flower logs"
+	@echo "  make logs-scrapy  - View Scrapy logs"
+	@echo "  make logs-uvicorn - View Uvicorn logs"
+	@echo "  make logs-all     - View all logs"
+	@echo "  make logs-clean   - Clean all log files"
+	@echo "  make logs-size    - Show log files size"

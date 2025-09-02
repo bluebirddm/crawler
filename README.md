@@ -67,13 +67,22 @@ uv run python init_db.py
 ./start.sh
 ```
 
+启动后系统会显示：
+- 各服务的访问地址
+- 日志文件位置信息  
+- 日志查看命令提示
+
 #### Method 2: Using Makefile
 ```bash
 # Run in different terminal windows
 make run-api      # Start API service
 make run-worker   # Start Celery Worker
-make run-beat     # Start Celery Beat
+make run-beat     # Start Celery Beat  
 make run-flower   # Start Flower monitoring
+
+# 查看服务日志（启动后使用）
+make logs-api     # 实时查看API日志
+make logs-worker  # 实时查看Worker日志
 ```
 
 #### Method 3: Manual startup
@@ -234,6 +243,51 @@ The system automatically processes crawled articles:
 - Auto-generate 200-character summary
 - Based on key sentence extraction
 
+## 日志系统架构
+
+### 技术实现
+
+本项目采用分布式日志架构，每个服务维护独立的日志文件：
+
+#### 1. API服务日志 (loguru)
+```python
+# 配置位置: src/api/main.py
+logger.add(
+    "logs/api.log",
+    rotation="10 MB",      # 文件轮转
+    retention="7 days",    # 保留时间
+    format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {module}:{function}:{line} - {message}",
+    level="INFO",
+    enqueue=True          # 异步写入
+)
+```
+
+#### 2. Celery服务日志
+```python  
+# 配置位置: src/tasks/celery_app.py
+app.conf.update(
+    worker_log_format='[%(asctime)s: %(levelname)s/%(processName)s] %(message)s',
+    worker_task_log_format='[%(asctime)s: %(levelname)s/%(processName)s][%(task_name)s(%(task_id)s)] %(message)s',
+)
+```
+
+#### 3. Scrapy爬虫日志
+```python
+# 配置位置: src/settings.py  
+LOG_LEVEL = 'INFO'
+LOG_FILE = 'logs/scrapy.log'
+```
+
+#### 4. 日志轮转策略
+- **API日志**: 按文件大小轮转（10MB），保留7天
+- **Worker日志**: 按天轮转，保留30天
+- **Scrapy日志**: 手动管理，建议定期清理大文件
+
+#### 5. 性能优化
+- 异步日志写入，避免阻塞主线程
+- 日志级别可配置，生产环境建议使用INFO级别
+- 支持日志文件压缩和自动清理
+
 ## Project Structure
 
 ```
@@ -247,7 +301,7 @@ crawler/
 │   └── utils/            # Utilities
 ├── config/               # Configuration files
 ├── tests/                # Test code
-├── logs/                 # Log files
+├── logs/                 # 统一日志目录（api.log, worker.log, beat.log等）
 ├── docker-compose.yml    # Docker compose
 ├── Dockerfile           # Docker image
 ├── Makefile             # Build scripts
@@ -293,16 +347,68 @@ make lint
 
 ## Operations
 
-### Log Viewing
+### 日志管理系统
+
+本系统提供了统一的日志管理和查看工具，所有服务日志都集中存储在 `logs/` 目录下。
+
+#### 日志文件结构
+```
+logs/
+├── api.log          # FastAPI服务日志（loguru格式，自动轮转）
+├── worker.log       # Celery Worker任务处理日志
+├── beat.log         # Celery Beat调度器日志
+├── flower.log       # Flower监控服务日志
+├── uvicorn.log      # Uvicorn ASGI服务器日志
+└── scrapy.log       # Scrapy爬虫引擎日志
+```
+
+#### 日志查看命令
 ```bash
-# API logs
-tail -f logs/api.log
+# 查看特定服务日志（实时跟踪）
+make logs-api        # 查看API服务日志
+make logs-worker     # 查看Celery Worker日志
+make logs-beat       # 查看Celery Beat日志
+make logs-flower     # 查看Flower监控日志
+make logs-scrapy     # 查看Scrapy爬虫日志
+make logs-uvicorn    # 查看Uvicorn服务器日志
 
-# Scrapy logs
-tail -f logs/scrapy.log
+# 查看所有日志
+make logs-all        # 同时跟踪所有服务日志
 
-# Celery logs
-docker-compose logs -f celery_worker
+# 日志管理
+make logs-size       # 查看所有日志文件大小
+make logs-clean      # 清空所有日志文件（谨慎操作）
+```
+
+#### 日志配置特性
+
+1. **智能轮转**: API日志自动按10MB大小轮转，保留7天
+2. **统一格式**: 所有日志使用一致的时间戳和级别格式
+3. **双重输出**: 关键日志同时输出到文件和控制台
+4. **性能优化**: 异步日志写入，不影响服务性能
+
+#### 日志级别说明
+- **INFO**: 服务启动、数据库操作、任务执行等正常信息
+- **WARNING**: 重试操作、配置问题等需要关注的警告
+- **ERROR**: 服务异常、数据库连接失败、任务执行失败等错误
+- **DEBUG**: 详细的调试信息（需要修改配置启用）
+
+#### 常见日志查看场景
+```bash
+# 调试API接口问题
+make logs-api
+
+# 检查爬虫任务执行状态
+make logs-worker
+
+# 查看定时任务调度情况
+make logs-beat
+
+# 监控整体系统运行状态
+make logs-all
+
+# 检查磁盘空间使用
+make logs-size
 ```
 
 ### Database Management
@@ -333,17 +439,20 @@ curl -X POST "http://localhost:8000/api/admin/database/cleanup?days=30"
 ### 2. Celery Tasks Not Executing
 - Check if Redis service is running
 - Verify Worker process is running
-- Check Celery logs for errors
+- Check Celery logs: `make logs-worker` or `make logs-beat`
+- View Flower监控: http://localhost:5555
 
 ### 3. Crawl Failed
 - Check if target website is accessible
-- View logs/scrapy.log file
-- Check USER_AGENT settings
+- View Scrapy logs: `make logs-scrapy`
+- Check USER_AGENT settings in src/settings.py
+- Verify proxy middleware configuration
 
 ### 4. NLP Processing Error
 - Verify jieba tokenizer loaded properly
 - Check text encoding issues
-- View processing logs
+- View API processing logs: `make logs-api`
+- Check database connection status
 
 ### 5. Docker Startup Failed
 - Ensure Docker and Docker Compose installed

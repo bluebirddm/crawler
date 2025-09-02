@@ -1,4 +1,4 @@
-export interface Article {
+interface Article {
   id: number;
   url: string;
   title: string;
@@ -17,7 +17,9 @@ export interface Article {
   update_time: string;
 }
 
-export interface Task {
+export type { Article };
+
+interface Task {
   task_id: string;
   status: 'pending' | 'running' | 'completed' | 'failed';
   message: string;
@@ -25,17 +27,17 @@ export interface Task {
   result?: any;
 }
 
-export interface CrawlRequest {
+interface CrawlRequest {
   url: string;
   spider_name?: string;
 }
 
-export interface BatchCrawlRequest {
+interface BatchCrawlRequest {
   urls: string[];
   spider_name?: string;
 }
 
-export interface SystemInfo {
+interface SystemInfo {
   database_status: string;
   celery_status: string;
   total_articles: number;
@@ -43,19 +45,83 @@ export interface SystemInfo {
   system_time: string;
 }
 
-export interface CategoryStats {
+interface CategoryStats {
   category: string;
   count: number;
 }
 
-export interface DailyStats {
+interface DailyStats {
   date: string;
   count: number;
 }
 
-export interface Worker {
+export type Worker = {
   name: string;
   status: string;
   active_tasks: number;
   reserved_tasks: number;
-}
+};
+
+export type User = {
+  id: number;
+  username: string;
+  email: string;
+  is_active: boolean;
+  is_admin: boolean;
+  created_at: string;
+};
+
+export type SystemConfig = {
+  crawl_interval: number;
+  max_depth: number;
+  max_workers: number;
+  timeout: number;
+  user_agent: string;
+  proxy_enabled: boolean;
+  proxy_url?: string;
+};
+
+export type CreateUserRequest = {
+  username: string;
+  email: string;
+  password: string;
+  is_admin?: boolean;
+};
+
+export type Source = {
+  id: number;
+  name: string;
+  url: string;
+  enabled: boolean;
+  frequency: string;
+  last_crawl?: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CreateSourceRequest = {
+  name: string;
+  url: string;
+  enabled?: boolean;
+  frequency?: string;
+};
+
+export type MonitorStats = {
+  cpu_percent: number;
+  memory_percent: number;
+  disk_percent: number;
+  redis_status: string;
+  postgres_status: string;
+  celery_workers: number;
+  pending_tasks: number;
+  active_tasks: number;
+};
+
+export type {
+  Task,
+  CrawlRequest,
+  BatchCrawlRequest,
+  SystemInfo,
+  CategoryStats,
+  DailyStats
+};

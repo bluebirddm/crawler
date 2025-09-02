@@ -1,5 +1,5 @@
 import { apiClient } from './client';
-import { Task, CrawlRequest, BatchCrawlRequest } from '../types';
+import type { Task, CrawlRequest, BatchCrawlRequest } from '../types';
 
 export const tasksApi = {
   createCrawlTask: async (request: CrawlRequest) => {

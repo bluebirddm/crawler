@@ -18,7 +18,18 @@ class GeneralSpider(scrapy.Spider):
         else:
             self.start_urls = []
     
+    async def start(self):
+        """新的异步启动方法，兼容Scrapy 2.13+"""
+        for url in self.start_urls:
+            yield scrapy.Request(
+                url,
+                callback=self.parse,
+                errback=self.error_callback,
+                meta={'original_url': url}
+            )
+    
     def start_requests(self):
+        """保留向后兼容性，兼容Scrapy < 2.13"""
         for url in self.start_urls:
             yield scrapy.Request(
                 url,
@@ -46,9 +57,20 @@ class GeneralSpider(scrapy.Spider):
             
             item['source'] = self._extract_source(soup, response)
             
+            # 转换headers为可序列化的格式（字节键值转为字符串）
+            headers_dict = {}
+            for key, value in response.headers.items():
+                # 将字节类型的键和值转换为字符串
+                str_key = key.decode('utf-8') if isinstance(key, bytes) else key
+                if isinstance(value, list):
+                    str_value = [v.decode('utf-8') if isinstance(v, bytes) else v for v in value]
+                else:
+                    str_value = value.decode('utf-8') if isinstance(value, bytes) else value
+                headers_dict[str_key] = str_value
+            
             metadata = {
                 'status_code': response.status,
-                'headers': dict(response.headers),
+                'headers': headers_dict,
                 'crawl_depth': response.meta.get('depth', 0)
             }
             item['metadata'] = metadata

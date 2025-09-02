@@ -2,7 +2,7 @@
   "sources": [
     {
       "name": "技术博客",
-      "enabled": true,
+      "enabled": false,
       "urls": [
         "https://www.infoq.cn/",
         "https://segmentfault.com/",
@@ -13,7 +13,7 @@
     },
     {
       "name": "新闻网站",
-      "enabled": true,
+      "enabled": false,
       "urls": [
         "https://www.36kr.com/",
         "https://www.ifanr.com/"
@@ -34,11 +34,11 @@
   ],
   "schedule": {
     "hourly": {
-      "enabled": true,
+      "enabled": false,
       "categories": ["科技", "综合"]
     },
     "daily": {
-      "enabled": true,
+      "enabled": false,
       "time": "02:00",
       "categories": ["财经", "教育"]
     }

@@ -1,5 +1,5 @@
 import { apiClient } from './client';
-import { SystemInfo, Worker } from '../types';
+import type { SystemInfo, Worker } from '../types';
 
 export const adminApi = {
   getSystemInfo: async () => {

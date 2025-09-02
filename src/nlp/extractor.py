@@ -9,7 +9,7 @@ from loguru import logger
 class KeywordExtractor:
     def __init__(self):
         self.stop_words = self._load_stop_words()
-        jieba.analyse.set_stop_words(self.stop_words)
+        # 移除jieba.analyse.set_stop_words()调用，直接在提取时过滤停用词
     
     def _load_stop_words(self) -> set:
         common_stop_words = {

@@ -10,6 +10,23 @@ from ..models import init_db
 
 load_dotenv()
 
+# 配置loguru日志输出
+logger.remove()  # 移除默认handler
+logger.add(
+    "logs/api.log",
+    rotation="10 MB",
+    retention="7 days",
+    format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {module}:{function}:{line} - {message}",
+    level="INFO",
+    enqueue=True
+)
+# 保留控制台输出
+logger.add(
+    lambda msg: print(msg, end=""),
+    format="{time:HH:mm:ss} | {level} | {message}",
+    level="INFO"
+)
+
 app = FastAPI(
     title="Crawler API",
     description="Web Crawler with NLP Processing API",

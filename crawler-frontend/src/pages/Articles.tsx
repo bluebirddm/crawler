@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { articlesApi } from '@/api/articles';
-import { Article } from '@/types';
+import type { Article } from '../types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -23,31 +23,29 @@ export function Articles() {
   const pageSize = 10;
   const queryClient = useQueryClient();
 
-  const { data: articles, isLoading, refetch } = useQuery({
-    queryKey: ['articles', currentPage, selectedCategory, selectedLevel],
+  const {
+    data: articles,
+    isLoading,
+    isFetching,
+    refetch,
+  } = useQuery({
+    queryKey: ['searchArticles', searchQuery, selectedCategory, selectedLevel, currentPage],
     queryFn: () =>
-      articlesApi.getArticles({
-        skip: currentPage * pageSize,
-        limit: pageSize,
+      articlesApi.searchArticles({
+        q: searchQuery || undefined,
         category: selectedCategory || undefined,
         level: selectedLevel,
+        skip: currentPage * pageSize,
+        limit: pageSize,
       }),
-  });
-
-  const { data: searchResults } = useQuery({
-    queryKey: ['searchArticles', searchQuery],
-    queryFn: () => articlesApi.searchArticles(searchQuery),
-    enabled: searchQuery.length > 0,
   });
 
   const deleteMutation = useMutation({
     mutationFn: articlesApi.deleteArticle,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['articles'] });
+      queryClient.invalidateQueries({ queryKey: ['searchArticles'] });
     },
   });
-
-  const displayArticles = searchQuery ? searchResults : articles;
 
   const getLevelColor = (level: number) => {
     const colors = ['bg-gray-500', 'bg-green-500', 'bg-blue-500', 'bg-purple-500', 'bg-red-500'];
@@ -69,7 +67,11 @@ export function Articles() {
           <p className="text-muted-foreground">查看和管理爬取的文章</p>
         </div>
         <Button onClick={() => refetch()}>
-          <RefreshCw className="mr-2 h-4 w-4" />
+          <RefreshCw
+            className={`mr-2 h-4 w-4 ${
+              isFetching ? 'animate-spin' : ''
+            }`}
+          />
           刷新
         </Button>
       </div>
@@ -87,14 +89,20 @@ export function Articles() {
                 <Input
                   placeholder="搜索文章标题或内容..."
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setCurrentPage(0);
+                  }}
                   className="pl-10"
                 />
               </div>
             </div>
             <select
               value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
+              onChange={(e) => {
+                setSelectedCategory(e.target.value);
+                setCurrentPage(0);
+              }}
               className="rounded-md border border-input bg-background px-3 py-2"
             >
               <option value="">所有分类</option>
@@ -111,7 +119,10 @@ export function Articles() {
             </select>
             <select
               value={selectedLevel || ''}
-              onChange={(e) => setSelectedLevel(e.target.value ? Number(e.target.value) : undefined)}
+              onChange={(e) => {
+                setSelectedLevel(e.target.value ? Number(e.target.value) : undefined);
+                setCurrentPage(0);
+              }}
               className="rounded-md border border-input bg-background px-3 py-2"
             >
               <option value="">所有级别</option>
@@ -133,8 +144,8 @@ export function Articles() {
               <p className="text-muted-foreground">加载中...</p>
             </CardContent>
           </Card>
-        ) : displayArticles && displayArticles.length > 0 ? (
-          displayArticles.map((article: Article) => (
+        ) : articles && articles.length > 0 ? (
+          articles.map((article: Article) => (
             <Card key={article.id}>
               <CardHeader>
                 <div className="flex justify-between items-start">
@@ -217,27 +228,25 @@ export function Articles() {
       </div>
 
       {/* 分页 */}
-      {!searchQuery && (
-        <div className="flex justify-center gap-2">
-          <Button
-            variant="outline"
-            onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
-            disabled={currentPage === 0}
-          >
-            上一页
-          </Button>
-          <span className="flex items-center px-4">
-            第 {currentPage + 1} 页
-          </span>
-          <Button
-            variant="outline"
-            onClick={() => setCurrentPage(currentPage + 1)}
-            disabled={!articles || articles.length < pageSize}
-          >
-            下一页
-          </Button>
-        </div>
-      )}
+      <div className="flex justify-center gap-2">
+        <Button
+          variant="outline"
+          onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
+          disabled={currentPage === 0}
+        >
+          上一页
+        </Button>
+        <span className="flex items-center px-4">
+          第 {currentPage + 1} 页
+        </span>
+        <Button
+          variant="outline"
+          onClick={() => setCurrentPage(currentPage + 1)}
+          disabled={!articles || articles.length < pageSize}
+        >
+          下一页
+        </Button>
+      </div>
     </div>
   );
 }

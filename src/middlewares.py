@@ -19,10 +19,16 @@ class SpiderMiddleware:
         for i in result:
             yield i
 
+    async def process_spider_output_async(self, response, result, spider):
+        # 异步处理spider输出，支持异步迭代器
+        async for item_or_request in result:
+            yield item_or_request
+
     def process_spider_exception(self, response, exception, spider):
         logger.error(f"Spider exception: {exception}")
 
     def process_start_requests(self, start_requests, spider):
+        # 使用传统的process_start_requests方法
         for r in start_requests:
             yield r
 

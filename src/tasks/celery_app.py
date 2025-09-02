@@ -26,6 +26,11 @@ app.conf.update(
     worker_max_tasks_per_child=100,
     worker_prefetch_multiplier=4,
     
+    # 配置日志
+    worker_log_format='[%(asctime)s: %(levelname)s/%(processName)s] %(message)s',
+    worker_task_log_format='[%(asctime)s: %(levelname)s/%(processName)s][%(task_name)s(%(task_id)s)] %(message)s',
+    worker_log_color=False,
+    
     beat_schedule={
         'hourly-crawl': {
             'task': 'src.tasks.crawler_tasks.scheduled_crawl',

@@ -73,28 +73,32 @@ async def get_articles(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/{article_id}", response_model=ArticleResponse)
-async def get_article(article_id: int, db: Session = Depends(get_db)):
-    article = db.query(Article).filter(Article.id == article_id).first()
-    
-    if not article:
-        raise HTTPException(status_code=404, detail="Article not found")
-    
-    return article
-
-
 @router.get("/search/", response_model=List[ArticleResponse])
 async def search_articles(
-    q: str = Query(..., min_length=1, description="搜索关键词"),
+    q: Optional[str] = Query(None, description="搜索关键词"),
+    category: Optional[str] = Query(None, description="文章分类"),
+    level: Optional[int] = Query(None, description="文章级别"),
     skip: int = Query(0, ge=0),
     limit: int = Query(10, ge=1, le=100),
     db: Session = Depends(get_db)
 ):
     try:
-        query = db.query(Article).filter(
-            (Article.title.contains(q)) | 
-            (Article.content.contains(q))
-        )
+        query = db.query(Article)
+        
+        # 文本搜索条件
+        if q:
+            query = query.filter(
+                (Article.title.contains(q)) | 
+                (Article.content.contains(q))
+            )
+        
+        # 分类筛选条件
+        if category:
+            query = query.filter(Article.category == category)
+        
+        # 级别筛选条件
+        if level is not None:
+            query = query.filter(Article.level >= level)
         
         articles = query.order_by(Article.crawl_time.desc()).offset(skip).limit(limit).all()
         
@@ -103,6 +107,16 @@ async def search_articles(
     except Exception as e:
         logger.error(f"Search failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{article_id}", response_model=ArticleResponse)
+async def get_article(article_id: int, db: Session = Depends(get_db)):
+    article = db.query(Article).filter(Article.id == article_id).first()
+    
+    if not article:
+        raise HTTPException(status_code=404, detail="Article not found")
+    
+    return article
 
 
 @router.get("/stats/categories")

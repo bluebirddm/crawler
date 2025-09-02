@@ -1,5 +1,5 @@
 import { apiClient } from './client';
-import { Article, CategoryStats, DailyStats } from '../types';
+import type { Article, CategoryStats, DailyStats } from '../types/index';
 
 export const articlesApi = {
   getArticles: async (params?: {
@@ -18,9 +18,15 @@ export const articlesApi = {
     return response.data;
   },
 
-  searchArticles: async (query: string, skip = 0, limit = 10) => {
-    const response = await apiClient.get<Article[]>('/api/articles/search', {
-      params: { q: query, skip, limit },
+  searchArticles: async (params?: {
+    q?: string;
+    category?: string;
+    level?: number;
+    skip?: number;
+    limit?: number;
+  }) => {
+    const response = await apiClient.get<Article[]>('/api/articles/search/', {
+      params,
     });
     return response.data;
   },
