@@ -80,6 +80,7 @@ tail -n 20 /Users/dingmao/dm/code/taiji/crawler/logs/scrapy.log
 ```bash
 # 在macOS上使用gtimeout，或者直接限制条目数
 uv run scrapy crawl general -s CLOSESPIDER_ITEMCOUNT=1 -a start_urls="http://httpbin.org/html"
+uv run scrapy crawl general -a start_urls="http://httpbin.org/html"
 ```
 
 ### 7. 检查爬虫进程

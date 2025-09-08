@@ -1,6 +1,50 @@
 import { apiClient } from './client';
 import type { Task, CrawlRequest, BatchCrawlRequest } from '../types';
 
+export interface TaskHistoryQuery {
+  page?: number;
+  page_size?: number;
+  status?: string;
+  task_type?: string;
+  start_date?: string;
+  end_date?: string;
+  sort_by?: 'created_at' | 'completed_at' | 'status' | 'task_type';
+  order?: 'asc' | 'desc';
+}
+
+export interface TaskHistoryResponse {
+  total: number;
+  page: number;
+  page_size: number;
+  tasks: TaskHistoryItem[];
+}
+
+export interface TaskHistoryItem {
+  id: number;
+  task_id: string;
+  task_name: string;
+  task_type: string;
+  url?: string;
+  urls?: string[];
+  status: string;
+  result?: any;
+  error_message?: string;
+  retry_count: number;
+  created_at: string;
+  started_at?: string;
+  completed_at?: string;
+  duration_seconds?: number;
+  worker_name?: string;
+}
+
+export interface TaskStats {
+  total_tasks: number;
+  status_counts: Record<string, number>;
+  recent_tasks_24h: number;
+  success_rate: number;
+  avg_duration_seconds?: number;
+}
+
 export const tasksApi = {
   createCrawlTask: async (request: CrawlRequest) => {
     const response = await apiClient.post<Task>('/api/tasks/crawl', request);
@@ -40,6 +84,45 @@ export const tasksApi = {
 
   reprocessArticles: async (articleIds?: number[]) => {
     const response = await apiClient.post<Task>('/api/tasks/reprocess', { article_ids: articleIds });
+    return response.data;
+  },
+
+  // 历史任务相关 API
+  getTaskHistory: async (query: TaskHistoryQuery = {}) => {
+    const params = new URLSearchParams();
+    Object.entries(query).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) {
+        params.append(key, String(value));
+      }
+    });
+    
+    const response = await apiClient.get<TaskHistoryResponse>(
+      `/api/tasks/history?${params.toString()}`
+    );
+    return response.data;
+  },
+
+  getTaskHistoryDetail: async (taskId: string) => {
+    const response = await apiClient.get<TaskHistoryItem>(
+      `/api/tasks/history/${taskId}`
+    );
+    return response.data;
+  },
+
+  deleteTaskHistory: async (taskId: string) => {
+    const response = await apiClient.delete(`/api/tasks/history/${taskId}`);
+    return response.data;
+  },
+
+  getTaskStats: async () => {
+    const response = await apiClient.get<TaskStats>('/api/tasks/history/stats/summary');
+    return response.data;
+  },
+
+  cleanupOldHistory: async (days: number = 30) => {
+    const response = await apiClient.delete(
+      `/api/tasks/history/cleanup/old?days=${days}`
+    );
     return response.data;
   },
 };

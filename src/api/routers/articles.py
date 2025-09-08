@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from loguru import logger
 
 from ...models import get_db, Article
+from ...services import HotScoreService
 
 router = APIRouter()
 
@@ -27,6 +28,12 @@ class ArticleResponse(BaseModel):
     summary: Optional[str]
     crawl_time: datetime
     update_time: datetime
+    
+    view_count: int
+    like_count: int
+    share_count: int
+    hot_score: float
+    hot_score_updated_at: Optional[datetime]
     
     class Config:
         orm_mode = True
@@ -187,4 +194,126 @@ async def delete_article(article_id: int, db: Session = Depends(get_db)):
     except Exception as e:
         db.rollback()
         logger.error(f"Failed to delete article: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/hot/", response_model=List[ArticleResponse])
+async def get_hot_articles(
+    limit: int = Query(10, ge=1, le=50, description="返回数量"),
+    category: Optional[str] = Query(None, description="文章分类"),
+    time_range: Optional[str] = Query(None, regex="^(1d|7d|30d|all)$", description="时间范围"),
+    db: Session = Depends(get_db)
+):
+    """获取热门文章列表"""
+    try:
+        articles = HotScoreService.get_hot_articles(
+            db=db,
+            limit=limit,
+            category=category,
+            time_range=time_range
+        )
+        return articles
+    
+    except Exception as e:
+        logger.error(f"Failed to get hot articles: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/trending/", response_model=List[ArticleResponse])
+async def get_trending_articles(
+    limit: int = Query(10, ge=1, le=50, description="返回数量"),
+    hours: int = Query(24, ge=1, le=168, description="统计时间范围（小时）"),
+    db: Session = Depends(get_db)
+):
+    """获取趋势上升的文章"""
+    try:
+        articles = HotScoreService.get_trending_articles(
+            db=db,
+            limit=limit,
+            hours=hours
+        )
+        return articles
+    
+    except Exception as e:
+        logger.error(f"Failed to get trending articles: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{article_id}/view")
+async def increment_view(
+    article_id: int,
+    db: Session = Depends(get_db)
+):
+    """增加文章浏览次数"""
+    try:
+        success = HotScoreService.increment_view_count(article_id, db)
+        if not success:
+            raise HTTPException(status_code=404, detail="Article not found")
+        
+        return {"message": "View count incremented", "article_id": article_id}
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to increment view count: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{article_id}/like")
+async def toggle_like(
+    article_id: int,
+    is_like: bool = Query(..., description="true为点赞，false为取消点赞"),
+    db: Session = Depends(get_db)
+):
+    """点赞或取消点赞"""
+    try:
+        success = HotScoreService.toggle_like(article_id, is_like, db)
+        if not success:
+            raise HTTPException(status_code=404, detail="Article not found")
+        
+        action = "liked" if is_like else "unliked"
+        return {"message": f"Article {action}", "article_id": article_id}
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to toggle like: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{article_id}/share")
+async def record_share(
+    article_id: int,
+    db: Session = Depends(get_db)
+):
+    """记录文章分享"""
+    try:
+        success = HotScoreService.increment_share_count(article_id, db)
+        if not success:
+            raise HTTPException(status_code=404, detail="Article not found")
+        
+        return {"message": "Share recorded", "article_id": article_id}
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to record share: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/update-hot-scores")
+async def update_hot_scores(
+    days_back: int = Query(7, ge=1, le=30, description="更新最近N天的文章热度"),
+    db: Session = Depends(get_db)
+):
+    """批量更新文章热度分数"""
+    try:
+        updated_count = HotScoreService.batch_update_hot_scores(db, days_back)
+        return {
+            "message": "Hot scores updated successfully",
+            "updated_count": updated_count
+        }
+    
+    except Exception as e:
+        logger.error(f"Failed to update hot scores: {e}")
         raise HTTPException(status_code=500, detail=str(e))

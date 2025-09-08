@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Layout } from '@/components/layout/Layout';
 import { Dashboard } from '@/pages/Dashboard';
 import { Articles } from '@/pages/Articles';
+import { HotArticles } from '@/pages/HotArticles';
 import { Tasks } from '@/pages/Tasks';
 import { Sources } from '@/pages/Sources';
 import { Monitor } from '@/pages/Monitor';
@@ -27,6 +28,7 @@ function App() {
           <Route path="/" element={<Layout />}>
             <Route index element={<Dashboard />} />
             <Route path="articles" element={<Articles />} />
+            <Route path="hot" element={<HotArticles />} />
             <Route path="tasks" element={<Tasks />} />
             <Route path="sources" element={<Sources />} />
             <Route path="monitor" element={<Monitor />} />

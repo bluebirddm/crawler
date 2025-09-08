@@ -8,12 +8,14 @@ import {
   Database,
   Activity,
   BarChart,
+  Flame,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navigation = [
   { name: '仪表板', href: '/', icon: Home },
   { name: '文章管理', href: '/articles', icon: FileText },
+  { name: '热门文章', href: '/hot', icon: Flame },
   { name: '任务管理', href: '/tasks', icon: ListTodo },
   { name: '爬取源', href: '/sources', icon: Database },
   { name: '系统监控', href: '/monitor', icon: Activity },

@@ -27,12 +27,21 @@ class Article(Base):
     crawl_time = Column(DateTime, server_default=func.now())
     update_time = Column(DateTime, server_default=func.now(), onupdate=func.now())
     
+    # 热度相关字段
+    view_count = Column(Integer, default=0, nullable=False)
+    like_count = Column(Integer, default=0, nullable=False)
+    share_count = Column(Integer, default=0, nullable=False)
+    hot_score = Column(Float, default=0.0, nullable=False, index=True)
+    hot_score_updated_at = Column(DateTime)
+    
     metadata_json = Column(JSON)
     
     __table_args__ = (
         Index('idx_publish_date', 'publish_date'),
         Index('idx_category_level', 'category', 'level'),
         Index('idx_crawl_time', 'crawl_time'),
+        Index('idx_hot_score', 'hot_score'),
+        Index('idx_hot_score_time', 'hot_score', 'crawl_time'),
     )
     
     def to_dict(self):
@@ -51,6 +60,11 @@ class Article(Base):
             'sentiment': self.sentiment,
             'keywords': self.keywords,
             'summary': self.summary,
+            'view_count': self.view_count,
+            'like_count': self.like_count,
+            'share_count': self.share_count,
+            'hot_score': self.hot_score,
+            'hot_score_updated_at': self.hot_score_updated_at.isoformat() if self.hot_score_updated_at else None,
             'crawl_time': self.crawl_time.isoformat() if self.crawl_time else None,
             'update_time': self.update_time.isoformat() if self.update_time else None
         }

@@ -5,7 +5,7 @@ from fastapi.responses import JSONResponse
 from loguru import logger
 from dotenv import load_dotenv
 
-from .routers import articles, tasks, admin
+from .routers import articles, tasks, admin, stats, monitor
 from ..models import init_db
 
 load_dotenv()
@@ -44,6 +44,8 @@ app.add_middleware(
 app.include_router(articles.router, prefix="/api/articles", tags=["Articles"])
 app.include_router(tasks.router, prefix="/api/tasks", tags=["Tasks"])
 app.include_router(admin.router, prefix="/api/admin", tags=["Admin"])
+app.include_router(stats.router, prefix="/api/stats", tags=["Statistics"])
+app.include_router(monitor.router, prefix="/api/monitor", tags=["Monitoring"])
 
 @app.on_event("startup")
 async def startup_event():

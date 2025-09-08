@@ -13,6 +13,11 @@ interface Article {
   sentiment?: number;
   keywords?: string[];
   summary?: string;
+  view_count?: number;
+  like_count?: number;
+  share_count?: number;
+  hot_score?: number;
+  hot_score_updated_at?: string;
   crawl_time: string;
   update_time: string;
 }

@@ -8,7 +8,7 @@ from pathlib import Path
 # 添加项目根目录到Python路径
 sys.path.insert(0, str(Path(__file__).parent))
 
-from src.models import init_db, SessionLocal, Article
+from src.models import init_db, SessionLocal, Article, TaskHistory
 from loguru import logger
 
 
@@ -22,10 +22,11 @@ def main():
         
         # 验证数据库连接
         session = SessionLocal()
-        count = session.query(Article).count()
+        article_count = session.query(Article).count()
+        task_count = session.query(TaskHistory).count()
         session.close()
         
-        logger.success(f"数据库初始化成功！当前有 {count} 篇文章")
+        logger.success(f"数据库初始化成功！当前有 {article_count} 篇文章, {task_count} 条任务历史")
         
     except Exception as e:
         logger.error(f"数据库初始化失败: {e}")

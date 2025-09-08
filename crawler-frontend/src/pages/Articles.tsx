@@ -11,7 +11,13 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { Search, Trash2, Eye, RefreshCw } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Search, Trash2, Eye, RefreshCw, ExternalLink } from 'lucide-react';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 
@@ -20,6 +26,8 @@ export function Articles() {
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [selectedLevel, setSelectedLevel] = useState<number | undefined>();
   const [currentPage, setCurrentPage] = useState(0);
+  const [selectedArticleId, setSelectedArticleId] = useState<number | null>(null);
+  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
   const pageSize = 10;
   const queryClient = useQueryClient();
 
@@ -40,6 +48,15 @@ export function Articles() {
       }),
   });
 
+  const {
+    data: selectedArticle,
+    isLoading: isSelectedArticleLoading,
+  } = useQuery({
+    queryKey: ['article', selectedArticleId],
+    queryFn: () => articlesApi.getArticle(selectedArticleId!),
+    enabled: !!selectedArticleId,
+  });
+
   const deleteMutation = useMutation({
     mutationFn: articlesApi.deleteArticle,
     onSuccess: () => {
@@ -57,6 +74,16 @@ export function Articles() {
     if (sentiment > 0.3) return '正面';
     if (sentiment < -0.3) return '负面';
     return '中性';
+  };
+
+  const handleViewArticle = (articleId: number) => {
+    setSelectedArticleId(articleId);
+    setIsViewDialogOpen(true);
+  };
+
+  const handleCloseViewDialog = () => {
+    setIsViewDialogOpen(false);
+    setSelectedArticleId(null);
   };
 
   return (
@@ -203,7 +230,11 @@ export function Articles() {
                     查看原文
                   </a>
                   <div className="flex gap-2">
-                    <Button size="sm" variant="outline">
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      onClick={() => handleViewArticle(article.id)}
+                    >
                       <Eye className="h-4 w-4" />
                     </Button>
                     <Button
@@ -247,6 +278,131 @@ export function Articles() {
           下一页
         </Button>
       </div>
+
+      {/* 文章详情弹窗 */}
+      <Dialog open={isViewDialogOpen} onOpenChange={handleCloseViewDialog}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden">
+          <DialogHeader>
+            <DialogTitle>
+              {selectedArticle ? selectedArticle.title : '加载中...'}
+            </DialogTitle>
+          </DialogHeader>
+          
+          {isSelectedArticleLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <p className="text-muted-foreground">加载中...</p>
+            </div>
+          ) : selectedArticle ? (
+            <div className="space-y-4 overflow-y-auto max-h-[70vh]">
+              {/* 基本信息 */}
+              <div className="flex flex-wrap gap-2 pb-4 border-b">
+                <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                  <span>{selectedArticle.source_domain}</span>
+                  <span>·</span>
+                  <span>{selectedArticle.author || '未知作者'}</span>
+                  <span>·</span>
+                  <span>
+                    {format(new Date(selectedArticle.crawl_time), 'yyyy-MM-dd HH:mm', {
+                      locale: zhCN,
+                    })}
+                  </span>
+                </div>
+              </div>
+
+              {/* 标签信息 */}
+              <div className="flex flex-wrap gap-2">
+                <span
+                  className={`px-2 py-1 text-xs text-white rounded ${getLevelColor(
+                    selectedArticle.level
+                  )}`}
+                >
+                  L{selectedArticle.level}
+                </span>
+                {selectedArticle.category && (
+                  <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded">
+                    {selectedArticle.category}
+                  </span>
+                )}
+                <span className="px-2 py-1 text-xs bg-gray-100 text-gray-800 rounded">
+                  {getSentimentText(selectedArticle.sentiment)}
+                </span>
+              </div>
+
+              {/* 文章内容 */}
+              <div className="prose prose-sm max-w-none">
+                <h4 className="text-sm font-semibold text-gray-900 mb-2">文章内容</h4>
+                <div className="whitespace-pre-wrap text-sm leading-relaxed bg-gray-50 p-4 rounded-md">
+                  {selectedArticle.content}
+                </div>
+              </div>
+
+              {/* 摘要 */}
+              {selectedArticle.summary && (
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-900 mb-2">文章摘要</h4>
+                  <p className="text-sm bg-blue-50 p-3 rounded-md">
+                    {selectedArticle.summary}
+                  </p>
+                </div>
+              )}
+
+              {/* 关键词 */}
+              {selectedArticle.keywords && selectedArticle.keywords.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-900 mb-2">关键词</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedArticle.keywords.map((keyword, index) => (
+                      <span
+                        key={index}
+                        className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded"
+                      >
+                        {keyword}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 标签 */}
+              {selectedArticle.tags && selectedArticle.tags.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-900 mb-2">标签</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedArticle.tags.map((tag, index) => (
+                      <span
+                        key={index}
+                        className="px-2 py-1 text-xs bg-purple-100 text-purple-800 rounded"
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 操作按钮 */}
+              <div className="flex justify-between items-center pt-4 border-t">
+                <a
+                  href={selectedArticle.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 text-sm text-blue-600 hover:underline"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                  查看原文
+                </a>
+                <Button onClick={handleCloseViewDialog}>
+                  关闭
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-center py-8">
+              <p className="text-muted-foreground">文章未找到</p>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

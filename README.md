@@ -83,6 +83,13 @@ make run-flower   # Start Flower monitoring
 # 查看服务日志（启动后使用）
 make logs-api     # 实时查看API日志
 make logs-worker  # 实时查看Worker日志
+ 
+# 运行 Scrapy（支持单/多 URL）
+# 单个 URL：
+uv run scrapy crawl general -a start_url="http://httpbin.org/html"
+# 多个 URL（逗号分隔或 JSON 数组）：
+uv run scrapy crawl general -a start_urls="http://httpbin.org/html, https://example.com"
+uv run scrapy crawl general -a start_urls='["http://httpbin.org/html", "https://example.com"]'
 ```
 
 #### Method 3: Manual startup

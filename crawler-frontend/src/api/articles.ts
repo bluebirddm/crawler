@@ -50,4 +50,46 @@ export const articlesApi = {
     const response = await apiClient.delete(`/api/articles/${id}`);
     return response.data;
   },
+
+  // 热门文章相关API
+  getHotArticles: async (params?: {
+    limit?: number;
+    category?: string;
+    time_range?: '1d' | '7d' | '30d' | 'all';
+  }) => {
+    const response = await apiClient.get<Article[]>('/api/articles/hot/', { params });
+    return response.data;
+  },
+
+  getTrendingArticles: async (params?: {
+    limit?: number;
+    hours?: number;
+  }) => {
+    const response = await apiClient.get<Article[]>('/api/articles/trending/', { params });
+    return response.data;
+  },
+
+  incrementView: async (id: number) => {
+    const response = await apiClient.post(`/api/articles/${id}/view`);
+    return response.data;
+  },
+
+  toggleLike: async (id: number, isLike: boolean) => {
+    const response = await apiClient.post(`/api/articles/${id}/like`, null, {
+      params: { is_like: isLike }
+    });
+    return response.data;
+  },
+
+  recordShare: async (id: number) => {
+    const response = await apiClient.post(`/api/articles/${id}/share`);
+    return response.data;
+  },
+
+  updateHotScores: async (daysBack = 7) => {
+    const response = await apiClient.post('/api/articles/update-hot-scores', null, {
+      params: { days_back: daysBack }
+    });
+    return response.data;
+  },
 };

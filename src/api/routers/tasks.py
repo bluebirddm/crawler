@@ -1,10 +1,13 @@
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Query, Depends
 from pydantic import BaseModel, HttpUrl
-from typing import List, Optional
-from datetime import datetime
+from typing import List, Optional, Dict, Any
+from datetime import datetime, timedelta
+from sqlalchemy import desc, asc, and_, or_
+from sqlalchemy.orm import Session
 from loguru import logger
 
 from ...tasks import crawl_url, crawl_batch, reprocess_articles
+from ...models import get_db, TaskHistory, TaskStatus
 
 router = APIRouter()
 
@@ -159,14 +162,205 @@ async def get_scheduled_tasks():
 
 
 @router.delete("/cancel/{task_id}")
-async def cancel_task(task_id: str):
+async def cancel_task(task_id: str, db: Session = Depends(get_db)):
     try:
         from ...tasks import app
         
         app.control.revoke(task_id, terminate=True)
         
+        # 更新数据库中的任务状态
+        task_history = db.query(TaskHistory).filter_by(task_id=task_id).first()
+        if task_history:
+            task_history.status = TaskStatus.REVOKED
+            task_history.completed_at = datetime.now()
+            db.commit()
+        
         return {"message": f"Task {task_id} cancelled"}
     
     except Exception as e:
         logger.error(f"Failed to cancel task: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class TaskHistoryResponse(BaseModel):
+    total: int
+    page: int
+    page_size: int
+    tasks: List[Dict[str, Any]]
+
+
+@router.get("/history", response_model=TaskHistoryResponse)
+async def get_task_history(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    status: Optional[str] = None,
+    task_type: Optional[str] = None,
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
+    sort_by: str = Query("created_at", regex="^(created_at|completed_at|status|task_type)$"),
+    order: str = Query("desc", regex="^(asc|desc)$"),
+    db: Session = Depends(get_db)
+):
+    """获取任务历史记录"""
+    try:
+        query = db.query(TaskHistory)
+        
+        # 应用过滤条件
+        if status:
+            try:
+                status_enum = TaskStatus(status)
+                query = query.filter(TaskHistory.status == status_enum)
+            except ValueError:
+                raise HTTPException(status_code=400, detail=f"Invalid status: {status}")
+        
+        if task_type:
+            query = query.filter(TaskHistory.task_type == task_type)
+        
+        if start_date:
+            query = query.filter(TaskHistory.created_at >= start_date)
+        
+        if end_date:
+            query = query.filter(TaskHistory.created_at <= end_date)
+        
+        # 获取总数
+        total = query.count()
+        
+        # 排序
+        if order == "desc":
+            query = query.order_by(desc(getattr(TaskHistory, sort_by)))
+        else:
+            query = query.order_by(asc(getattr(TaskHistory, sort_by)))
+        
+        # 分页
+        offset = (page - 1) * page_size
+        tasks = query.offset(offset).limit(page_size).all()
+        
+        return TaskHistoryResponse(
+            total=total,
+            page=page,
+            page_size=page_size,
+            tasks=[task.to_dict() for task in tasks]
+        )
+    
+    except Exception as e:
+        logger.error(f"Failed to get task history: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/history/{task_id}")
+async def get_task_history_detail(task_id: str, db: Session = Depends(get_db)):
+    """获取单个任务历史详情"""
+    try:
+        task = db.query(TaskHistory).filter_by(task_id=task_id).first()
+        if not task:
+            raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+        
+        return task.to_dict()
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get task detail: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/history/{task_id}")
+async def delete_task_history(task_id: str, db: Session = Depends(get_db)):
+    """删除任务历史记录"""
+    try:
+        task = db.query(TaskHistory).filter_by(task_id=task_id).first()
+        if not task:
+            raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+        
+        db.delete(task)
+        db.commit()
+        
+        return {"message": f"Task history {task_id} deleted"}
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to delete task history: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/history/stats/summary")
+async def get_task_stats(db: Session = Depends(get_db)):
+    """获取任务统计信息"""
+    try:
+        # 获取最近24小时的统计
+        last_24h = datetime.now() - timedelta(days=1)
+        
+        # 总任务数
+        total_tasks = db.query(TaskHistory).count()
+        
+        # 各状态任务数
+        status_counts = {}
+        for status in TaskStatus:
+            count = db.query(TaskHistory).filter(
+                TaskHistory.status == status
+            ).count()
+            status_counts[status.value] = count
+        
+        # 最近24小时任务数
+        recent_tasks = db.query(TaskHistory).filter(
+            TaskHistory.created_at >= last_24h
+        ).count()
+        
+        # 计算成功率
+        success_count = status_counts.get(TaskStatus.SUCCESS.value, 0)
+        failure_count = status_counts.get(TaskStatus.FAILURE.value, 0)
+        total_completed = success_count + failure_count
+        success_rate = (success_count / total_completed * 100) if total_completed > 0 else 0
+        
+        # 获取平均执行时间（成功的任务）
+        from sqlalchemy import func
+        avg_duration = db.query(
+            func.avg(
+                func.extract('epoch', TaskHistory.completed_at - TaskHistory.started_at)
+            )
+        ).filter(
+            and_(
+                TaskHistory.status == TaskStatus.SUCCESS,
+                TaskHistory.started_at.isnot(None),
+                TaskHistory.completed_at.isnot(None)
+            )
+        ).scalar()
+        
+        return {
+            "total_tasks": total_tasks,
+            "status_counts": status_counts,
+            "recent_tasks_24h": recent_tasks,
+            "success_rate": round(success_rate, 2),
+            "avg_duration_seconds": round(avg_duration, 2) if avg_duration else None
+        }
+    
+    except Exception as e:
+        logger.error(f"Failed to get task stats: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/history/cleanup/old")
+async def cleanup_old_history(
+    days: int = Query(30, ge=1, le=365),
+    db: Session = Depends(get_db)
+):
+    """清理旧的任务历史记录"""
+    try:
+        cutoff_date = datetime.now() - timedelta(days=days)
+        
+        deleted_count = db.query(TaskHistory).filter(
+            TaskHistory.created_at < cutoff_date
+        ).delete()
+        
+        db.commit()
+        
+        return {
+            "message": f"Deleted {deleted_count} task history records older than {days} days",
+            "deleted_count": deleted_count
+        }
+    
+    except Exception as e:
+        logger.error(f"Failed to cleanup old history: {e}")
+        db.rollback()
         raise HTTPException(status_code=500, detail=str(e))

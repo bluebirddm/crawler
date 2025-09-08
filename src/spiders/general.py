@@ -10,13 +10,57 @@ from ..items import ArticleItem
 
 class GeneralSpider(scrapy.Spider):
     name = 'general'
-    
-    def __init__(self, start_url=None, *args, **kwargs):
+
+    def __init__(self, start_url=None, start_urls=None, *args, **kwargs):
+        """支持 -a start_url=... 与 -a start_urls=... 两种传参形式。
+
+        start_urls 可为：
+        - 逗号/空白/分号分隔的字符串
+        - JSON 字符串（单个字符串或字符串数组）
+        """
         super(GeneralSpider, self).__init__(*args, **kwargs)
+
+        urls = []
         if start_url:
-            self.start_urls = [start_url]
-        else:
-            self.start_urls = []
+            urls.append(start_url)
+        if start_urls:
+            urls.extend(self._parse_urls_arg(start_urls))
+
+        # 去重并保序
+        seen = set()
+        deduped = []
+        for u in urls:
+            if u and u not in seen:
+                seen.add(u)
+                deduped.append(u)
+        self.start_urls = deduped
+
+        if not self.start_urls:
+            logger.warning(
+                "未提供有效的起始 URL。请使用 -a start_url=... 或 -a start_urls=..."
+            )
+
+    def _parse_urls_arg(self, value):
+        # 允许 list/tuple 直接传入
+        if isinstance(value, (list, tuple)):
+            return [str(v) for v in value if v]
+
+        # 优先尝试 JSON 解析
+        try:
+            import json
+
+            data = json.loads(value)
+            if isinstance(data, str):
+                return [data]
+            if isinstance(data, (list, tuple)):
+                return [str(v) for v in data if v]
+        except Exception:
+            pass
+
+        # 回退为分隔符拆分
+        import re
+
+        return [u.strip() for u in re.split(r"[\s,;]+", str(value)) if u.strip()]
     
     async def start(self):
         """新的异步启动方法，兼容Scrapy 2.13+"""
