@@ -26,7 +26,6 @@ import {
   Eye,
   Heart,
   Share2,
-  Clock,
   User,
   Calendar,
   RefreshCw,
@@ -40,7 +39,7 @@ import { zhCN } from 'date-fns/locale';
 export function HotArticles() {
   const queryClient = useQueryClient();
   const [timeRange, setTimeRange] = useState<'1d' | '7d' | '30d' | 'all'>('7d');
-  const [selectedCategory, setSelectedCategory] = useState<string>('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [likedArticles, setLikedArticles] = useState<Set<number>>(new Set());
 
   // 从 localStorage 加载点赞状态
@@ -57,12 +56,12 @@ export function HotArticles() {
   };
 
   // 获取热门文章
-  const { data: hotArticles, isLoading: isHotLoading, refetch: refetchHot } = useQuery({
+  const { data: hotArticles, isLoading: isHotLoading } = useQuery({
     queryKey: ['hotArticles', timeRange, selectedCategory],
     queryFn: () => articlesApi.getHotArticles({
       limit: 20,
       time_range: timeRange,
-      category: selectedCategory || undefined,
+      category: selectedCategory === 'all' ? undefined : selectedCategory,
     }),
     refetchInterval: 60000, // 每分钟刷新
   });
@@ -288,7 +287,7 @@ export function HotArticles() {
         <div className="flex gap-2">
           <Button
             variant="outline"
-            onClick={() => updateScoresMutation.mutate()}
+            onClick={() => updateScoresMutation.mutate(7)}
             disabled={updateScoresMutation.isPending}
           >
             <RefreshCw className={`h-4 w-4 mr-2 ${updateScoresMutation.isPending ? 'animate-spin' : ''}`} />
@@ -331,7 +330,7 @@ export function HotArticles() {
                 <SelectValue placeholder="所有分类" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">所有分类</SelectItem>
+                <SelectItem value="all">所有分类</SelectItem>
                 {categories?.map((cat) => (
                   <SelectItem key={cat.category} value={cat.category}>
                     {cat.category} ({cat.count})

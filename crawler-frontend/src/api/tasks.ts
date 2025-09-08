@@ -1,7 +1,7 @@
 import { apiClient } from './client';
 import type { Task, CrawlRequest, BatchCrawlRequest } from '../types';
 
-export interface TaskHistoryQuery {
+interface TaskHistoryQuery {
   page?: number;
   page_size?: number;
   status?: string;
@@ -12,14 +12,14 @@ export interface TaskHistoryQuery {
   order?: 'asc' | 'desc';
 }
 
-export interface TaskHistoryResponse {
+interface TaskHistoryResponse {
   total: number;
   page: number;
   page_size: number;
   tasks: TaskHistoryItem[];
 }
 
-export interface TaskHistoryItem {
+interface TaskHistoryItem {
   id: number;
   task_id: string;
   task_name: string;
@@ -37,13 +37,20 @@ export interface TaskHistoryItem {
   worker_name?: string;
 }
 
-export interface TaskStats {
+interface TaskStats {
   total_tasks: number;
   status_counts: Record<string, number>;
   recent_tasks_24h: number;
   success_rate: number;
   avg_duration_seconds?: number;
 }
+
+export type {
+  TaskHistoryQuery,
+  TaskHistoryResponse,
+  TaskHistoryItem,
+  TaskStats
+};
 
 export const tasksApi = {
   createCrawlTask: async (request: CrawlRequest) => {
