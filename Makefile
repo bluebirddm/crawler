@@ -1,4 +1,30 @@
 .PHONY: install test run clean docker-build docker-up docker-down logs-api logs-worker logs-beat logs-flower logs-scrapy logs-uvicorn logs-all logs-clean logs-size
+.PHONY: swagger-assets
+
+# 下载本地 Swagger UI 资源到 static/swagger-ui/
+swagger-assets:
+	@echo "Preparing local Swagger UI assets..."
+	@mkdir -p static/swagger-ui
+	@if command -v curl >/dev/null 2>&1; then \
+	  echo "Using curl to download swagger-ui-dist"; \
+	  curl -fsSL -o static/swagger-ui/swagger-ui.css \
+	    https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css || true; \
+	  curl -fsSL -o static/swagger-ui/swagger-ui-bundle.js \
+	    https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js || true; \
+	  curl -fsSL -o static/swagger-ui/swagger-ui-standalone-preset.js \
+	    https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-standalone-preset.js || true; \
+	elif command -v wget >/dev/null 2>&1; then \
+	  echo "Using wget to download swagger-ui-dist"; \
+	  wget -qO static/swagger-ui/swagger-ui.css \
+	    https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css || true; \
+	  wget -qO static/swagger-ui/swagger-ui-bundle.js \
+	    https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js || true; \
+	  wget -qO static/swagger-ui/swagger-ui-standalone-preset.js \
+	    https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-standalone-preset.js || true; \
+	else \
+	  echo "Neither curl nor wget found. Please install one of them."; \
+	fi
+	@ls -lh static/swagger-ui || true
 
 # 安装依赖
 install:
@@ -115,6 +141,7 @@ help:
 	@echo "  make format      - Format code"
 	@echo "  make lint        - Check code quality"
 	@echo "  make init-db     - Initialize database tables"
+	@echo "  make swagger-assets - Download local Swagger UI assets"
 	@echo ""
 	@echo "Log management:"
 	@echo "  make logs-api     - View API logs"

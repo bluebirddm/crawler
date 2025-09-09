@@ -197,8 +197,8 @@ async def get_task_history(
     task_type: Optional[str] = None,
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
-    sort_by: str = Query("created_at", regex="^(created_at|completed_at|status|task_type)$"),
-    order: str = Query("desc", regex="^(asc|desc)$"),
+    sort_by: str = Query("created_at", pattern="^(created_at|completed_at|status|task_type)$"),
+    order: str = Query("desc", pattern="^(asc|desc)$"),
     db: Session = Depends(get_db)
 ):
     """获取任务历史记录"""

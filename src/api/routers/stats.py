@@ -326,8 +326,8 @@ async def get_tag_stats(
 
 @router.get("/timeseries")
 async def get_time_series(
-    metric: str = Query('articles', regex='^(articles|tasks|errors|response_time)$'),
-    interval: str = Query('day', regex='^(hour|day|week|month)$'),
+    metric: str = Query('articles', pattern='^(articles|tasks|errors|response_time)$'),
+    interval: str = Query('day', pattern='^(hour|day|week|month)$'),
     period: int = Query(7, ge=1, le=90),
     db: Session = Depends(get_db)
 ):
@@ -389,7 +389,7 @@ async def get_time_series(
 
 @router.get("/export")
 async def export_stats_report(
-    format: str = Query('excel', regex='^(csv|excel|pdf)$'),
+    format: str = Query('excel', pattern='^(csv|excel|pdf)$'),
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     db: Session = Depends(get_db)

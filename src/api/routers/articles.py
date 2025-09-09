@@ -39,6 +39,38 @@ class ArticleResponse(BaseModel):
         orm_mode = True
 
 
+class ArticleCreate(BaseModel):
+    """创建文章的请求模型"""
+    url: str
+    title: str
+    content: str
+    author: Optional[str] = None
+    publish_date: Optional[datetime] = None
+    source: Optional[str] = None
+    source_domain: Optional[str] = None
+    category: Optional[str] = None
+    tags: Optional[List[str]] = None
+    level: int = 0
+    keywords: Optional[List[str]] = None
+    summary: Optional[str] = None
+
+
+class ArticleUpdate(BaseModel):
+    """更新文章的请求模型"""
+    url: Optional[str] = None
+    title: Optional[str] = None
+    content: Optional[str] = None
+    author: Optional[str] = None
+    publish_date: Optional[datetime] = None
+    source: Optional[str] = None
+    source_domain: Optional[str] = None
+    category: Optional[str] = None
+    tags: Optional[List[str]] = None
+    level: Optional[int] = None
+    keywords: Optional[List[str]] = None
+    summary: Optional[str] = None
+
+
 class ArticleFilter(BaseModel):
     category: Optional[str] = None
     level: Optional[int] = None
@@ -201,7 +233,7 @@ async def delete_article(article_id: int, db: Session = Depends(get_db)):
 async def get_hot_articles(
     limit: int = Query(10, ge=1, le=50, description="返回数量"),
     category: Optional[str] = Query(None, description="文章分类"),
-    time_range: Optional[str] = Query(None, regex="^(1d|7d|30d|all)$", description="时间范围"),
+    time_range: Optional[str] = Query(None, pattern="^(1d|7d|30d|all)$", description="时间范围"),
     db: Session = Depends(get_db)
 ):
     """获取热门文章列表"""
@@ -316,4 +348,86 @@ async def update_hot_scores(
     
     except Exception as e:
         logger.error(f"Failed to update hot scores: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/", response_model=ArticleResponse)
+async def create_article(
+    article_data: ArticleCreate,
+    db: Session = Depends(get_db)
+):
+    """创建新文章"""
+    try:
+        # 检查 URL 是否已存在
+        existing_article = db.query(Article).filter(Article.url == article_data.url).first()
+        if existing_article:
+            raise HTTPException(status_code=400, detail="Article with this URL already exists")
+        
+        # 创建新文章实例
+        new_article = Article(
+            url=article_data.url,
+            title=article_data.title,
+            content=article_data.content,
+            author=article_data.author,
+            publish_date=article_data.publish_date,
+            source=article_data.source,
+            source_domain=article_data.source_domain,
+            category=article_data.category,
+            tags=article_data.tags,
+            level=article_data.level,
+            keywords=article_data.keywords,
+            summary=article_data.summary,
+            # 设置默认值
+            view_count=0,
+            like_count=0,
+            share_count=0,
+            hot_score=0.0
+        )
+        
+        # 保存到数据库
+        db.add(new_article)
+        db.commit()
+        db.refresh(new_article)
+        
+        logger.info(f"Created new article: {new_article.id} - {new_article.title}")
+        return new_article
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to create article: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/{article_id}", response_model=ArticleResponse)
+async def update_article(
+    article_id: int,
+    article_data: ArticleUpdate,
+    db: Session = Depends(get_db)
+):
+    """更新文章"""
+    try:
+        # 查找文章
+        article = db.query(Article).filter(Article.id == article_id).first()
+        if not article:
+            raise HTTPException(status_code=404, detail="Article not found")
+        
+        # 更新非空字段
+        update_data = article_data.dict(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(article, field, value)
+        
+        # 保存更改
+        db.commit()
+        db.refresh(article)
+        
+        logger.info(f"Updated article: {article.id} - {article.title}")
+        return article
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update article {article_id}: {e}")
+        db.rollback()
         raise HTTPException(status_code=500, detail=str(e))

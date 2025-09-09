@@ -1,5 +1,8 @@
 import os
 from fastapi import FastAPI
+from fastapi.openapi.docs import get_swagger_ui_oauth2_redirect_html
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from loguru import logger
@@ -30,7 +33,10 @@ logger.add(
 app = FastAPI(
     title="Crawler API",
     description="Web Crawler with NLP Processing API",
-    version="1.0.0"
+    version="1.0.0",
+    # Disable built-in docs to allow custom, configurable assets (CDN/local)
+    docs_url=None,
+    redoc_url=None,
 )
 
 app.add_middleware(
@@ -46,6 +52,86 @@ app.include_router(tasks.router, prefix="/api/tasks", tags=["Tasks"])
 app.include_router(admin.router, prefix="/api/admin", tags=["Admin"])
 app.include_router(stats.router, prefix="/api/stats", tags=["Statistics"])
 app.include_router(monitor.router, prefix="/api/monitor", tags=["Monitoring"])
+
+# Optionally serve local static assets (for offline Swagger UI)
+# Put swagger-ui-dist files under ./static/swagger-ui if you want to use local assets
+if os.path.isdir("static"):
+    app.mount("/static", StaticFiles(directory="static"), name="static")
+
+
+@app.get("/docs", include_in_schema=False)
+async def custom_swagger_ui_html():
+    # Allow overriding asset URLs via environment variables (helpful for regions where default CDN is blocked)
+    bundle_js_url = os.getenv(
+        "SWAGGER_UI_BUNDLE_JS_URL",
+        "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js",
+    )
+    preset_js_url = os.getenv(
+        "SWAGGER_UI_STANDALONE_JS_URL",
+        "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-standalone-preset.js",
+    )
+    css_url = os.getenv(
+        "SWAGGER_UI_CSS_URL",
+        "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css",
+    )
+    # Prefer local files if present
+    local_bundle = "/static/swagger-ui/swagger-ui-bundle.js"
+    local_preset = "/static/swagger-ui/swagger-ui-standalone-preset.js"
+    local_css = "/static/swagger-ui/swagger-ui.css"
+    if (
+        os.path.exists("static/swagger-ui/swagger-ui-bundle.js")
+        and os.path.exists("static/swagger-ui/swagger-ui-standalone-preset.js")
+        and os.path.exists("static/swagger-ui/swagger-ui.css")
+    ):
+        bundle_js_url = local_bundle
+        preset_js_url = local_preset
+        css_url = local_css
+
+    html = f"""
+    <!DOCTYPE html>
+    <html lang=\"en\">
+    <head>
+      <meta charset=\"UTF-8\" />
+      <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />
+      <title>{app.title} - Swagger UI</title>
+      <link rel=\"stylesheet\" type=\"text/css\" href=\"{css_url}\" />
+      <style>body {{ margin: 0; background: #fafafa; }}</style>
+    </head>
+    <body>
+      <div id=\"swagger-ui\"></div>
+      <script src=\"{bundle_js_url}\"></script>
+      <script src=\"{preset_js_url}\"></script>
+      <script>
+        window.onload = function() {{
+          const ui = SwaggerUIBundle({{
+            url: "{app.openapi_url}",
+            dom_id: '#swagger-ui',
+            deepLinking: true,
+            presets: [SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset],
+            layout: "StandaloneLayout"
+          }});
+          window.ui = ui;
+        }}
+      </script>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html)
+
+
+@app.get("/docs/oauth2-redirect", include_in_schema=False)
+async def swagger_ui_redirect():
+    return get_swagger_ui_oauth2_redirect_html()
+
+
+@app.get("/redoc", include_in_schema=False)
+async def redoc_redirect():
+    # Simple redirect to Swagger UI to keep a single docs entrypoint
+    # Users can still access OpenAPI at /openapi.json
+    return get_swagger_ui_html(
+        openapi_url=app.openapi_url,
+        title=f"{app.title} - Swagger UI",
+    )
 
 @app.on_event("startup")
 async def startup_event():

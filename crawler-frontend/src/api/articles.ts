@@ -1,5 +1,5 @@
 import { apiClient } from './client';
-import type { Article, CategoryStats, DailyStats } from '../types/index';
+import type { Article, CategoryStats, DailyStats, ArticleCreateRequest, ArticleUpdateRequest } from '../types/index';
 
 export const articlesApi = {
   getArticles: async (params?: {
@@ -90,6 +90,16 @@ export const articlesApi = {
     const response = await apiClient.post('/api/articles/update-hot-scores', null, {
       params: { days_back: daysBack }
     });
+    return response.data;
+  },
+
+  createArticle: async (article: ArticleCreateRequest) => {
+    const response = await apiClient.post<Article>('/api/articles/', article);
+    return response.data;
+  },
+
+  updateArticle: async (id: number, article: ArticleUpdateRequest) => {
+    const response = await apiClient.put<Article>(`/api/articles/${id}`, article);
     return response.data;
   },
 };

@@ -24,6 +24,38 @@ interface Article {
 
 export type { Article };
 
+interface ArticleCreateRequest {
+  url: string;
+  title: string;
+  content: string;
+  author?: string;
+  publish_date?: string;
+  source?: string;
+  source_domain?: string;
+  category?: string;
+  tags?: string[];
+  level?: number;
+  keywords?: string[];
+  summary?: string;
+}
+
+interface ArticleUpdateRequest {
+  url?: string;
+  title?: string;
+  content?: string;
+  author?: string;
+  publish_date?: string;
+  source?: string;
+  source_domain?: string;
+  category?: string;
+  tags?: string[];
+  level?: number;
+  keywords?: string[];
+  summary?: string;
+}
+
+export type { ArticleCreateRequest, ArticleUpdateRequest };
+
 interface Task {
   task_id: string;
   status: 'pending' | 'running' | 'completed' | 'failed';

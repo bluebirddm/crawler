@@ -290,7 +290,7 @@ async def get_services_status():
 @router.get("/logs", response_model=List[LogEntry])
 async def get_system_logs(
     limit: int = Query(100, ge=1, le=1000),
-    level: Optional[str] = Query(None, regex='^(DEBUG|INFO|WARNING|ERROR|CRITICAL)$'),
+    level: Optional[str] = Query(None, pattern='^(DEBUG|INFO|WARNING|ERROR|CRITICAL)$'),
     source: Optional[str] = None
 ):
     try:
