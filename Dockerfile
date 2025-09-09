@@ -9,17 +9,21 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-COPY pyproject.toml uv.lock ./
+# Install uv first
+RUN pip install uv
 
-RUN pip install uv && \
-    uv sync --frozen
-
+# Copy the entire project so that package metadata (e.g., README.md) is present
 COPY . .
 
-RUN playwright install chromium
-RUN playwright install-deps chromium
+# Sync dependencies and install the project
+RUN uv sync --frozen
+
+# Install Playwright browser and dependencies
+RUN uv run playwright install chromium
+RUN uv run playwright install-deps chromium
 
 ENV PYTHONPATH=/app
+ENV PATH=/app/.venv/bin:$PATH
 
 EXPOSE 8000
 

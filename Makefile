@@ -1,4 +1,4 @@
-.PHONY: install test run clean docker-build docker-up docker-down logs-api logs-worker logs-beat logs-flower logs-scrapy logs-uvicorn logs-all logs-clean logs-size
+.PHONY: install test run clean docker-build docker-up docker-down docker-start docker-stop logs-api logs-worker logs-beat logs-flower logs-scrapy logs-uvicorn logs-all logs-clean logs-size
 .PHONY: swagger-assets
 
 # 下载本地 Swagger UI 资源到 static/swagger-ui/
@@ -67,6 +67,13 @@ docker-down:
 
 docker-logs:
 	docker-compose logs -f
+
+# Convenience wrappers around scripts
+docker-start:
+	./start_docker.sh $(ARGS)
+
+docker-stop:
+	./stop_docker.sh $(ARGS)
 
 # 清理
 clean:
@@ -137,6 +144,8 @@ help:
 	@echo "  make crawl URL=  - Run crawler for specific URL"
 	@echo "  make docker-up   - Start Docker services"
 	@echo "  make docker-down - Stop Docker services"
+	@echo "  make docker-start - Start via ./start_docker.sh (ARGS=...)"
+	@echo "  make docker-stop  - Stop via ./stop_docker.sh (ARGS=...)"
 	@echo "  make clean       - Clean cache files"
 	@echo "  make format      - Format code"
 	@echo "  make lint        - Check code quality"

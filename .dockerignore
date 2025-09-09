@@ -1,0 +1,9 @@
+crawler-frontend/
+.git
+.venv
+logs/
+tests/
+data/
+*.log
+__pycache__/
+*.pyc
