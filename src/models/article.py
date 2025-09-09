@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, JSON, Float, Index
+from sqlalchemy import Column, Integer, String, Text, DateTime, JSON, Float, Index, ForeignKey
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from .database import Base
 
@@ -33,6 +34,10 @@ class Article(Base):
     share_count = Column(Integer, default=0, nullable=False)
     hot_score = Column(Float, default=0.0, nullable=False, index=True)
     hot_score_updated_at = Column(DateTime)
+    
+    # 关联爬取源
+    source_id = Column(Integer, ForeignKey('crawler_sources.id', ondelete='SET NULL'))
+    source = relationship("CrawlerSource", backref="articles")
     
     metadata_json = Column(JSON)
     

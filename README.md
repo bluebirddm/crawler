@@ -113,14 +113,21 @@ uv run celery -A src.tasks.celery_app flower
 ### 5. Docker Deployment
 
 ```bash
-# Build and start all services
-docker-compose up -d
+# Option A: One-click startup script (recommended)
+./start_docker.sh           # builds, starts, waits, and health-checks
+# Rebuild without cache
+./start_docker.sh --rebuild
 
-# View logs
-docker-compose logs -f
+# Stop all services
+./stop_docker.sh            # compose down (remove orphans)
+# Stop and remove volumes/images as needed
+./stop_docker.sh -v         # also remove volumes
+./stop_docker.sh --rmi all  # also remove images
 
-# Stop services
-docker-compose down
+# Option B: Raw docker compose
+docker compose up -d        # or: docker-compose up -d
+docker compose logs -f      # tail logs
+docker compose down         # stop all
 ```
 
 ## API Usage

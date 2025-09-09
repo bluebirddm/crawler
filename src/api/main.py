@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 from loguru import logger
 from dotenv import load_dotenv
 
-from .routers import articles, tasks, admin, stats, monitor
+from .routers import articles, tasks, admin, stats, monitor, sources
 from ..models import init_db
 
 load_dotenv()
@@ -52,6 +52,7 @@ app.include_router(tasks.router, prefix="/api/tasks", tags=["Tasks"])
 app.include_router(admin.router, prefix="/api/admin", tags=["Admin"])
 app.include_router(stats.router, prefix="/api/stats", tags=["Statistics"])
 app.include_router(monitor.router, prefix="/api/monitor", tags=["Monitoring"])
+app.include_router(sources.router, prefix="/api/sources", tags=["Sources"])
 
 # Optionally serve local static assets (for offline Swagger UI)
 # Put swagger-ui-dist files under ./static/swagger-ui if you want to use local assets
