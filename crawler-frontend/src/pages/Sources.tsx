@@ -1,11 +1,19 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Edit2, Trash2, Play, TestTube, RefreshCw, Globe, Clock, Hash, Search, Filter, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { Plus, Edit2, Trash2, Play, TestTube, RefreshCw, Globe, Clock, Hash, Search, Filter, CheckCircle, XCircle, AlertCircle, MoreVertical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import {
   Dialog,
   DialogContent,
@@ -361,97 +369,103 @@ export function Sources() {
       {/* 爬取源列表 */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {filteredSources.map((source) => (
-          <Card key={source.id}>
-            <CardHeader>
-              <div className="flex justify-between items-start">
-                <div>
-                  <CardTitle className="text-lg">{source.name}</CardTitle>
-                  <CardDescription className="text-xs mt-1">
+          <Card key={source.id} className="overflow-hidden">
+            <CardHeader className="pb-3">
+              <div className="flex justify-between items-start gap-2">
+                <div className="flex-1 min-w-0">
+                  <CardTitle className="text-lg truncate">{source.name}</CardTitle>
+                  <CardDescription className="text-xs mt-1 break-all">
                     {source.url}
                   </CardDescription>
                 </div>
-                <div className="flex space-x-1">
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    onClick={() => testMutation.mutate(source.id)}
-                    disabled={testMutation.isPending}
-                    title="测试连接"
-                  >
-                    <TestTube className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    onClick={() => triggerMutation.mutate(source.id)}
-                    disabled={triggerMutation.isPending || !source.enabled}
-                    title="立即爬取"
-                  >
-                    <Play className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    onClick={() => {
-                      setEditingSource(source);
-                      setIsAddDialogOpen(true);
-                    }}
-                    title="编辑"
-                  >
-                    <Edit2 className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    onClick={() => {
-                      if (confirm('确定要删除这个爬取源吗？')) {
-                        deleteMutation.mutate(source.id);
-                      }
-                    }}
-                    disabled={deleteMutation.isPending}
-                    title="删除"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 flex-shrink-0 focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                    >
+                      <MoreVertical className="h-4 w-4" />
+                      <span className="sr-only">打开菜单</span>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuLabel>操作</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() => testMutation.mutate(source.id)}
+                      disabled={testMutation.isPending}
+                    >
+                      <TestTube className="mr-2 h-4 w-4" />
+                      测试连接
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => triggerMutation.mutate(source.id)}
+                      disabled={triggerMutation.isPending || !source.enabled}
+                    >
+                      <Play className="mr-2 h-4 w-4" />
+                      立即爬取
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setEditingSource(source);
+                        setIsAddDialogOpen(true);
+                      }}
+                    >
+                      <Edit2 className="mr-2 h-4 w-4" />
+                      编辑
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => {
+                        if (confirm('确定要删除这个爬取源吗？')) {
+                          deleteMutation.mutate(source.id);
+                        }
+                      }}
+                      disabled={deleteMutation.isPending}
+                      className="text-red-600 focus:text-red-600"
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      删除
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </CardHeader>
-            <CardContent>
-              <div className="space-y-2 text-sm">
-                <div className="flex items-center justify-between">
-                  <span className="flex items-center text-muted-foreground">
-                    <Clock className="mr-1 h-3 w-3" />
-                    间隔
-                  </span>
-                  <span>{source.interval} 分钟</span>
+            <CardContent className="pt-0">
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div className="flex items-center gap-1.5">
+                    <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span className="text-muted-foreground">间隔:</span>
+                    <span className="font-medium">{source.interval}分钟</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Hash className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span className="text-muted-foreground">文章:</span>
+                    <span className="font-medium">{source.articleCount}</span>
+                  </div>
                 </div>
+                
                 <div className="flex items-center justify-between">
-                  <span className="flex items-center text-muted-foreground">
-                    <Globe className="mr-1 h-3 w-3" />
-                    分类
-                  </span>
-                  <Badge variant="secondary">{source.category}</Badge>
+                  <div className="flex items-center gap-1.5">
+                    <Globe className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span className="text-muted-foreground text-sm">分类</span>
+                  </div>
+                  <Badge variant="secondary" className="text-xs">{source.category}</Badge>
                 </div>
+                
                 <div className="flex items-center justify-between">
-                  <span className="flex items-center text-muted-foreground">
-                    <Hash className="mr-1 h-3 w-3" />
-                    文章数
-                  </span>
-                  <span>{source.articleCount}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">状态</span>
-                  <span
-                    className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                      source.enabled
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-gray-100 text-gray-800'
-                    }`}
+                  <span className="text-sm text-muted-foreground">状态</span>
+                  <Badge
+                    variant={source.enabled ? 'default' : 'secondary'}
+                    className={source.enabled ? 'bg-green-100 text-green-800 hover:bg-green-100' : ''}
                   >
                     {source.enabled ? '已启用' : '已禁用'}
-                  </span>
+                  </Badge>
                 </div>
-                <div className="pt-2 border-t">
+                
+                <div className="pt-3 border-t">
                   <p className="text-xs text-muted-foreground">
                     上次爬取：{formatDate(source.lastCrawled)}
                   </p>

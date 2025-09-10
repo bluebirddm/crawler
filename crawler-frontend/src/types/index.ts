@@ -25,7 +25,7 @@ interface Article {
 export type { Article };
 
 interface ArticleCreateRequest {
-  url: string;
+  url?: string;
   title: string;
   content: string;
   author?: string;

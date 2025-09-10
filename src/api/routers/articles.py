@@ -41,7 +41,7 @@ class ArticleResponse(BaseModel):
 
 class ArticleCreate(BaseModel):
     """创建文章的请求模型"""
-    url: str
+    url: Optional[str] = None
     title: str
     content: str
     author: Optional[str] = None
@@ -358,10 +358,11 @@ async def create_article(
 ):
     """创建新文章"""
     try:
-        # 检查 URL 是否已存在
-        existing_article = db.query(Article).filter(Article.url == article_data.url).first()
-        if existing_article:
-            raise HTTPException(status_code=400, detail="Article with this URL already exists")
+        # 检查 URL 是否已存在（仅当提供了 URL 时）
+        if article_data.url:
+            existing_article = db.query(Article).filter(Article.url == article_data.url).first()
+            if existing_article:
+                raise HTTPException(status_code=400, detail="Article with this URL already exists")
         
         # 创建新文章实例
         new_article = Article(
@@ -415,6 +416,16 @@ async def update_article(
         
         # 更新非空字段
         update_data = article_data.dict(exclude_unset=True)
+        
+        # 如果更新 URL，检查唯一性
+        if 'url' in update_data and update_data['url']:
+            existing_article = db.query(Article).filter(
+                Article.url == update_data['url'],
+                Article.id != article_id
+            ).first()
+            if existing_article:
+                raise HTTPException(status_code=400, detail="Article with this URL already exists")
+        
         for field, value in update_data.items():
             setattr(article, field, value)
         

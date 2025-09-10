@@ -187,10 +187,10 @@ export function Articles() {
     e.preventDefault();
     
     // 基础验证
-    if (!formData.url || !formData.title || !formData.content) {
+    if (!formData.title || !formData.content) {
       toast({
         title: "错误",
-        description: "请填写必填字段",
+        description: "请填写必填字段（标题和内容）",
         variant: "destructive",
       });
       return;
@@ -375,14 +375,18 @@ export function Articles() {
                   </div>
                 )}
                 <div className="flex justify-between items-center mt-4">
-                  <a
-                    href={article.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-sm text-blue-600 hover:underline"
-                  >
-                    查看原文
-                  </a>
+                  {article.url ? (
+                    <a
+                      href={article.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-blue-600 hover:underline"
+                    >
+                      查看原文
+                    </a>
+                  ) : (
+                    <span className="text-sm text-gray-400">无原文链接</span>
+                  )}
                   <div className="flex gap-2">
                     <Button 
                       size="sm" 
@@ -543,15 +547,19 @@ export function Articles() {
 
               {/* 操作按钮 */}
               <div className="flex justify-between items-center pt-4 border-t">
-                <a
-                  href={selectedArticle.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 text-sm text-blue-600 hover:underline"
-                >
-                  <ExternalLink className="h-4 w-4" />
-                  查看原文
-                </a>
+                {selectedArticle.url ? (
+                  <a
+                    href={selectedArticle.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 text-sm text-blue-600 hover:underline"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                    查看原文
+                  </a>
+                ) : (
+                  <span className="text-sm text-gray-400">无原文链接</span>
+                )}
                 <Button onClick={handleCloseViewDialog}>
                   关闭
                 </Button>
@@ -574,13 +582,12 @@ export function Articles() {
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* URL */}
             <div>
-              <Label htmlFor="url">URL *</Label>
+              <Label htmlFor="url">URL</Label>
               <Input
                 id="url"
                 value={formData.url}
                 onChange={(e) => handleInputChange('url', e.target.value)}
-                placeholder="https://example.com/article"
-                required
+                placeholder="https://example.com/article（可选）"
               />
             </div>
 
