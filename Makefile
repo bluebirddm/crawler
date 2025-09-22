@@ -1,6 +1,11 @@
 .PHONY: install test run clean docker-build docker-up docker-down docker-start docker-stop logs-api logs-worker logs-beat logs-flower logs-scrapy logs-uvicorn logs-all logs-clean logs-size
 .PHONY: swagger-assets
 
+# Detect if 'uv' is available; choose appropriate runner
+HAS_UV := $(shell command -v uv >/dev/null 2>&1 && echo 1 || echo 0)
+RUN := $(if $(filter 1,$(HAS_UV)),uv run,python3 -m)
+PY := $(if $(filter 1,$(HAS_UV)),uv run python,python3)
+
 # 下载本地 Swagger UI 资源到 static/swagger-ui/
 swagger-assets:
 	@echo "Preparing local Swagger UI assets..."
@@ -28,32 +33,38 @@ swagger-assets:
 
 # 安装依赖
 install:
-	pip install uv
-	uv sync
+	@if command -v uv >/dev/null 2>&1; then \
+	  echo "Using uv to sync environment"; \
+	  uv sync; \
+	else \
+	  echo "uv not found; falling back to pip install ."; \
+	  python3 -m pip install --upgrade pip || true; \
+	  python3 -m pip install .; \
+	fi
 
 # 运行测试
 test:
-	uv run pytest tests/ -v
+	$(RUN) pytest tests/ -v
 
 # 启动API服务
 run-api:
-	uv run uvicorn src.api.main:app --reload --host 0.0.0.0 --port 8000
+	$(RUN) uvicorn src.api.main:app --reload --host 0.0.0.0 --port 8000
 
 # 启动Celery Worker
 run-worker:
-	uv run celery -A src.tasks.celery_app worker --loglevel=info
+	$(RUN) celery -A src.tasks.celery_app worker --loglevel=info
 
 # 启动Celery Beat
 run-beat:
-	uv run celery -A src.tasks.celery_app beat --loglevel=info
+	$(RUN) celery -A src.tasks.celery_app beat --loglevel=info
 
 # 启动Flower
 run-flower:
-	uv run celery -A src.tasks.celery_app flower
+	$(RUN) celery -A src.tasks.celery_app flower
 
 # 运行爬虫
 crawl:
-	uv run scrapy crawl general -a start_url=$(URL)
+	$(RUN) scrapy crawl general -a start_url=$(URL)
 
 # Docker相关
 docker-build:
@@ -86,17 +97,17 @@ clean:
 
 # 代码格式化
 format:
-	uv run black src/ tests/
-	uv run isort src/ tests/
+	$(RUN) black src/ tests/
+	$(RUN) isort src/ tests/
 
 # 代码检查
 lint:
-	uv run flake8 src/ tests/
-	uv run mypy src/
+	$(RUN) flake8 src/ tests/
+	$(RUN) mypy src/
 
 # 数据库初始化
 init-db:
-	uv run python -c "from src.models import init_db; init_db()"
+	$(PY) -c "from src.models import init_db; init_db()"
 
 # 创建数据库（仅用于首次设置）
 create-db:
