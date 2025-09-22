@@ -37,7 +37,7 @@ class Article(Base):
     
     # 关联爬取源
     source_id = Column(Integer, ForeignKey('crawler_sources.id', ondelete='SET NULL'))
-    source = relationship("CrawlerSource", backref="articles")
+    crawler_source = relationship("CrawlerSource", backref="articles")
     
     metadata_json = Column(JSON)
     

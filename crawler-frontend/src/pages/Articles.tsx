@@ -27,7 +27,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Search, Trash2, Eye, RefreshCw, ExternalLink, Plus, Edit } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Search, Trash2, Eye, RefreshCw, ExternalLink, Plus, Edit, Trash, CheckSquare, Square } from 'lucide-react';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 import { useToast } from '@/components/ui/use-toast';
@@ -42,6 +53,8 @@ export function Articles() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingArticle, setEditingArticle] = useState<Article | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const pageSize = 10;
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -91,6 +104,26 @@ export function Articles() {
     mutationFn: articlesApi.deleteArticle,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['searchArticles'] });
+    },
+  });
+
+  const batchDeleteMutation = useMutation({
+    mutationFn: articlesApi.deleteArticlesBatch,
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['searchArticles'] });
+      toast({
+        title: "批量删除成功",
+        description: `成功删除 ${data.deleted_count} 篇文章`,
+      });
+      setSelectedIds(new Set());
+      setIsDeleteDialogOpen(false);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "批量删除失败",
+        description: error.response?.data?.detail || "删除文章时发生错误",
+        variant: "destructive",
+      });
     },
   });
 
@@ -234,6 +267,37 @@ export function Articles() {
     setSelectedArticleId(null);
   };
 
+  const handleSelectAll = () => {
+    if (!articles) return;
+    
+    if (selectedIds.size === articles.length) {
+      setSelectedIds(new Set());
+    } else {
+      const allIds = new Set(articles.map(article => article.id));
+      setSelectedIds(allIds);
+    }
+  };
+
+  const handleSelectArticle = (articleId: number) => {
+    const newSelectedIds = new Set(selectedIds);
+    if (newSelectedIds.has(articleId)) {
+      newSelectedIds.delete(articleId);
+    } else {
+      newSelectedIds.add(articleId);
+    }
+    setSelectedIds(newSelectedIds);
+  };
+
+  const handleBatchDelete = () => {
+    if (selectedIds.size === 0) return;
+    setIsDeleteDialogOpen(true);
+  };
+
+  const confirmBatchDelete = () => {
+    const idsToDelete = Array.from(selectedIds);
+    batchDeleteMutation.mutate(idsToDelete);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -242,6 +306,17 @@ export function Articles() {
           <p className="text-muted-foreground">查看和管理爬取的文章</p>
         </div>
         <div className="flex gap-2">
+          {selectedIds.size > 0 && (
+            <>
+              <span className="flex items-center text-sm text-muted-foreground mr-2">
+                已选中 {selectedIds.size} 项
+              </span>
+              <Button onClick={handleBatchDelete} variant="destructive">
+                <Trash className="mr-2 h-4 w-4" />
+                批量删除
+              </Button>
+            </>
+          )}
           <Button onClick={handleOpenCreateDialog}>
             <Plus className="mr-2 h-4 w-4" />
             新增文章
@@ -317,6 +392,29 @@ export function Articles() {
         </CardContent>
       </Card>
 
+      {/* 批量操作栏 */}
+      {articles && articles.length > 0 && (
+        <div className="flex items-center gap-4 px-4 py-2 bg-gray-50 rounded-md">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleSelectAll}
+          >
+            {selectedIds.size === articles.length ? (
+              <>
+                <CheckSquare className="mr-2 h-4 w-4" />
+                取消全选
+              </>
+            ) : (
+              <>
+                <Square className="mr-2 h-4 w-4" />
+                全选当前页
+              </>
+            )}
+          </Button>
+        </div>
+      )}
+
       {/* 文章列表 */}
       <div className="space-y-4">
         {isLoading ? (
@@ -327,17 +425,24 @@ export function Articles() {
           </Card>
         ) : articles && articles.length > 0 ? (
           articles.map((article: Article) => (
-            <Card key={article.id}>
+            <Card key={article.id} className={selectedIds.has(article.id) ? 'ring-2 ring-primary' : ''}>
               <CardHeader>
                 <div className="flex justify-between items-start">
-                  <div className="space-y-1">
-                    <CardTitle className="text-xl">{article.title}</CardTitle>
-                    <CardDescription>
-                      {article.source_domain} · {article.author || '未知作者'} ·{' '}
-                      {format(new Date(article.crawl_time), 'yyyy-MM-dd HH:mm', {
-                        locale: zhCN,
-                      })}
-                    </CardDescription>
+                  <div className="flex items-start space-x-3">
+                    <Checkbox
+                      checked={selectedIds.has(article.id)}
+                      onCheckedChange={() => handleSelectArticle(article.id)}
+                      className="mt-1"
+                    />
+                    <div className="space-y-1">
+                      <CardTitle className="text-xl">{article.title}</CardTitle>
+                      <CardDescription>
+                        {article.source_domain} · {article.author || '未知作者'} ·{' '}
+                        {format(new Date(article.crawl_time), 'yyyy-MM-dd HH:mm', {
+                          locale: zhCN,
+                        })}
+                      </CardDescription>
+                    </div>
                   </div>
                   <div className="flex gap-2">
                     <span
@@ -741,6 +846,27 @@ export function Articles() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* 批量删除确认对话框 */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认批量删除</AlertDialogTitle>
+            <AlertDialogDescription>
+              您确定要删除选中的 {selectedIds.size} 篇文章吗？此操作无法撤销。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmBatchDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              确认删除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

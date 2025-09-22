@@ -331,11 +331,13 @@ export function HotArticles() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">所有分类</SelectItem>
-                {categories?.map((cat) => (
-                  <SelectItem key={cat.category} value={cat.category}>
-                    {cat.category} ({cat.count})
-                  </SelectItem>
-                ))}
+                {categories
+                  ?.filter(cat => cat.category != null && cat.category !== '')
+                  .map((cat) => (
+                    <SelectItem key={cat.category} value={cat.category}>
+                      {cat.category} ({cat.count})
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
           </div>

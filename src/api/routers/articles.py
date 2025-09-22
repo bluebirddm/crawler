@@ -13,7 +13,7 @@ router = APIRouter()
 
 class ArticleResponse(BaseModel):
     id: int
-    url: str
+    url: Optional[str]
     title: str
     content: str
     author: Optional[str]
@@ -36,7 +36,7 @@ class ArticleResponse(BaseModel):
     hot_score_updated_at: Optional[datetime]
     
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class ArticleCreate(BaseModel):
@@ -80,6 +80,11 @@ class ArticleFilter(BaseModel):
     keyword: Optional[str] = None
 
 
+class ArticleBatchDeleteRequest(BaseModel):
+    """批量删除文章的请求模型"""
+    article_ids: List[int]
+
+
 @router.get("/", response_model=List[ArticleResponse])
 async def get_articles(
     skip: int = Query(0, ge=0),
@@ -96,7 +101,7 @@ async def get_articles(
             query = query.filter(Article.category == category)
         
         if level is not None:
-            query = query.filter(Article.level >= level)
+            query = query.filter(Article.level == level)
         
         if days:
             start_date = datetime.now() - timedelta(days=days)
@@ -137,7 +142,7 @@ async def search_articles(
         
         # 级别筛选条件
         if level is not None:
-            query = query.filter(Article.level >= level)
+            query = query.filter(Article.level == level)
         
         articles = query.order_by(Article.crawl_time.desc()).offset(skip).limit(limit).all()
         
@@ -226,6 +231,60 @@ async def delete_article(article_id: int, db: Session = Depends(get_db)):
     except Exception as e:
         db.rollback()
         logger.error(f"Failed to delete article: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/batch/delete")
+async def delete_articles_batch(
+    request: ArticleBatchDeleteRequest,
+    db: Session = Depends(get_db)
+):
+    """批量删除文章"""
+    if not request.article_ids:
+        raise HTTPException(status_code=400, detail="No article IDs provided")
+    
+    # 记录删除结果
+    deleted_ids = []
+    failed_ids = []
+    
+    try:
+        # 查找所有要删除的文章
+        articles_to_delete = db.query(Article).filter(
+            Article.id.in_(request.article_ids)
+        ).all()
+        
+        # 获取实际存在的文章ID
+        existing_ids = {article.id for article in articles_to_delete}
+        
+        # 找出不存在的文章ID
+        not_found_ids = [aid for aid in request.article_ids if aid not in existing_ids]
+        failed_ids.extend(not_found_ids)
+        
+        # 批量删除存在的文章
+        if articles_to_delete:
+            for article in articles_to_delete:
+                try:
+                    db.delete(article)
+                    deleted_ids.append(article.id)
+                except Exception as e:
+                    logger.error(f"Failed to delete article {article.id}: {e}")
+                    failed_ids.append(article.id)
+            
+            # 提交事务
+            db.commit()
+            logger.info(f"Batch deleted {len(deleted_ids)} articles")
+        
+        return {
+            "message": f"Batch delete completed",
+            "deleted_count": len(deleted_ids),
+            "deleted_ids": deleted_ids,
+            "failed_ids": failed_ids,
+            "total_requested": len(request.article_ids)
+        }
+    
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to batch delete articles: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

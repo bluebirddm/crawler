@@ -102,4 +102,11 @@ export const articlesApi = {
     const response = await apiClient.put<Article>(`/api/articles/${id}`, article);
     return response.data;
   },
+
+  deleteArticlesBatch: async (articleIds: number[]) => {
+    const response = await apiClient.delete('/api/articles/batch/delete', {
+      data: { article_ids: articleIds }
+    });
+    return response.data;
+  },
 };
