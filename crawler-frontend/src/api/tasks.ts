@@ -132,4 +132,11 @@ export const tasksApi = {
     );
     return response.data;
   },
+
+  deleteBatchTaskHistory: async (taskIds: string[]) => {
+    const response = await apiClient.delete('/api/tasks/history/batch', {
+      data: { task_ids: taskIds }
+    });
+    return response.data;
+  },
 };

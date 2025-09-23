@@ -5,6 +5,8 @@ import type { TaskHistoryQuery } from '@/api/tasks';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Select,
@@ -21,6 +23,17 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import {
   Play,
   Pause,
   X,
@@ -35,13 +48,14 @@ import {
   Trash2,
   TrendingUp,
   Activity,
+  CalendarIcon,
 } from 'lucide-react';
 
 export function Tasks() {
   const queryClient = useQueryClient();
   const [crawlUrl, setCrawlUrl] = useState('');
   const [batchUrls, setBatchUrls] = useState('');
-  
+
   // 历史任务查询参数
   const [historyQuery, setHistoryQuery] = useState<TaskHistoryQuery>({
     page: 1,
@@ -49,6 +63,10 @@ export function Tasks() {
     sort_by: 'created_at',
     order: 'desc',
   });
+
+  // 批量选择状态
+  const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set());
+  const [selectAll, setSelectAll] = useState(false);
 
   const { data: activeTasks, refetch: refetchActive } = useQuery({
     queryKey: ['activeTasks'],
@@ -65,6 +83,11 @@ export function Tasks() {
   const { data: taskHistory, isLoading: isHistoryLoading } = useQuery({
     queryKey: ['taskHistory', historyQuery],
     queryFn: () => tasksApi.getTaskHistory(historyQuery),
+    onSuccess: () => {
+      // Clear selection when data changes (page, filter, etc.)
+      setSelectedTasks(new Set());
+      setSelectAll(false);
+    },
   });
 
   const { data: taskStats } = useQuery({
@@ -106,6 +129,15 @@ export function Tasks() {
     },
   });
 
+  const batchDeleteMutation = useMutation({
+    mutationFn: tasksApi.deleteBatchTaskHistory,
+    onSuccess: () => {
+      setSelectedTasks(new Set());
+      setSelectAll(false);
+      queryClient.invalidateQueries({ queryKey: ['taskHistory'] });
+    },
+  });
+
   const handleCrawl = () => {
     if (crawlUrl) {
       crawlMutation.mutate({ url: crawlUrl });
@@ -119,6 +151,44 @@ export function Tasks() {
         batchCrawlMutation.mutate({ urls });
       }
     }
+  };
+
+  const handleSelectAll = (checked: boolean) => {
+    setSelectAll(checked);
+    if (checked && taskHistory) {
+      const allTaskIds = new Set(taskHistory.tasks.map(task => task.task_id));
+      setSelectedTasks(allTaskIds);
+    } else {
+      setSelectedTasks(new Set());
+    }
+  };
+
+  const handleSelectTask = (taskId: string, checked: boolean) => {
+    const newSelected = new Set(selectedTasks);
+    if (checked) {
+      newSelected.add(taskId);
+    } else {
+      newSelected.delete(taskId);
+      setSelectAll(false);
+    }
+    setSelectedTasks(newSelected);
+  };
+
+  const handleBatchDelete = () => {
+    if (selectedTasks.size > 0) {
+      batchDeleteMutation.mutate(Array.from(selectedTasks));
+    }
+  };
+
+  const formatDateForInput = (date: Date) => {
+    return date.toISOString().split('T')[0];
+  };
+
+  const getToday = () => formatDateForInput(new Date());
+  const getLastWeek = () => {
+    const date = new Date();
+    date.setDate(date.getDate() - 7);
+    return formatDateForInput(date);
   };
 
   const getStatusIcon = (status: string) => {
@@ -436,73 +506,138 @@ export function Tasks() {
                 </div>
                 
                 {/* 筛选器 */}
-                <div className="flex gap-2">
-                  <Select
-                    value={historyQuery.status || 'all'}
-                    onValueChange={(value) => 
-                      setHistoryQuery(prev => ({
-                        ...prev,
-                        status: value === 'all' ? undefined : value,
-                        page: 1,
-                      }))
-                    }
-                  >
-                    <SelectTrigger className="w-[150px]">
-                      <SelectValue placeholder="状态筛选" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">全部状态</SelectItem>
-                      <SelectItem value="success">成功</SelectItem>
-                      <SelectItem value="failure">失败</SelectItem>
-                      <SelectItem value="running">执行中</SelectItem>
-                      <SelectItem value="pending">等待中</SelectItem>
-                      <SelectItem value="retry">重试中</SelectItem>
-                      <SelectItem value="revoked">已取消</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  
-                  <Select
-                    value={historyQuery.task_type || 'all'}
-                    onValueChange={(value) => 
-                      setHistoryQuery(prev => ({
-                        ...prev,
-                        task_type: value === 'all' ? undefined : value,
-                        page: 1,
-                      }))
-                    }
-                  >
-                    <SelectTrigger className="w-[150px]">
-                      <SelectValue placeholder="任务类型" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">全部类型</SelectItem>
-                      <SelectItem value="crawl_url">单个爬取</SelectItem>
-                      <SelectItem value="crawl_batch">批量爬取</SelectItem>
-                      <SelectItem value="scheduled_crawl">定时爬取</SelectItem>
-                      <SelectItem value="reprocess">重新处理</SelectItem>
-                      <SelectItem value="cleanup">清理任务</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  
-                  <Select
-                    value={historyQuery.sort_by || 'created_at'}
-                    onValueChange={(value: any) => 
-                      setHistoryQuery(prev => ({
-                        ...prev,
-                        sort_by: value,
-                      }))
-                    }
-                  >
-                    <SelectTrigger className="w-[150px]">
-                      <SelectValue placeholder="排序方式" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="created_at">创建时间</SelectItem>
-                      <SelectItem value="completed_at">完成时间</SelectItem>
-                      <SelectItem value="status">状态</SelectItem>
-                      <SelectItem value="task_type">任务类型</SelectItem>
-                    </SelectContent>
-                  </Select>
+                <div className="space-y-4">
+                  <div className="flex gap-2 flex-wrap">
+                    <Select
+                      value={historyQuery.status || 'all'}
+                      onValueChange={(value) =>
+                        setHistoryQuery(prev => ({
+                          ...prev,
+                          status: value === 'all' ? undefined : value,
+                          page: 1,
+                        }))
+                      }
+                    >
+                      <SelectTrigger className="w-[150px]">
+                        <SelectValue placeholder="状态筛选" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">全部状态</SelectItem>
+                        <SelectItem value="success">成功</SelectItem>
+                        <SelectItem value="failure">失败</SelectItem>
+                        <SelectItem value="running">执行中</SelectItem>
+                        <SelectItem value="pending">等待中</SelectItem>
+                        <SelectItem value="retry">重试中</SelectItem>
+                        <SelectItem value="revoked">已取消</SelectItem>
+                      </SelectContent>
+                    </Select>
+
+                    <Select
+                      value={historyQuery.task_type || 'all'}
+                      onValueChange={(value) =>
+                        setHistoryQuery(prev => ({
+                          ...prev,
+                          task_type: value === 'all' ? undefined : value,
+                          page: 1,
+                        }))
+                      }
+                    >
+                      <SelectTrigger className="w-[150px]">
+                        <SelectValue placeholder="任务类型" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">全部类型</SelectItem>
+                        <SelectItem value="crawl_url">单个爬取</SelectItem>
+                        <SelectItem value="crawl_batch">批量爬取</SelectItem>
+                        <SelectItem value="scheduled_crawl">定时爬取</SelectItem>
+                        <SelectItem value="reprocess">重新处理</SelectItem>
+                        <SelectItem value="cleanup">清理任务</SelectItem>
+                      </SelectContent>
+                    </Select>
+
+                    <Select
+                      value={historyQuery.sort_by || 'created_at'}
+                      onValueChange={(value: any) =>
+                        setHistoryQuery(prev => ({
+                          ...prev,
+                          sort_by: value,
+                        }))
+                      }
+                    >
+                      <SelectTrigger className="w-[150px]">
+                        <SelectValue placeholder="排序方式" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="created_at">创建时间</SelectItem>
+                        <SelectItem value="completed_at">完成时间</SelectItem>
+                        <SelectItem value="status">状态</SelectItem>
+                        <SelectItem value="task_type">任务类型</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* 日期范围筛选 */}
+                  <div className="flex gap-2 items-center flex-wrap">
+                    <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+                    <Label htmlFor="start-date" className="text-sm">创建时间:</Label>
+                    <Input
+                      id="start-date"
+                      type="date"
+                      className="w-[150px]"
+                      value={historyQuery.start_date || ''}
+                      onChange={(e) =>
+                        setHistoryQuery(prev => ({
+                          ...prev,
+                          start_date: e.target.value || undefined,
+                          page: 1,
+                        }))
+                      }
+                    />
+                    <span className="text-muted-foreground">至</span>
+                    <Input
+                      id="end-date"
+                      type="date"
+                      className="w-[150px]"
+                      value={historyQuery.end_date || ''}
+                      onChange={(e) =>
+                        setHistoryQuery(prev => ({
+                          ...prev,
+                          end_date: e.target.value || undefined,
+                          page: 1,
+                        }))
+                      }
+                    />
+                    <div className="flex gap-1">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          setHistoryQuery(prev => ({
+                            ...prev,
+                            start_date: getLastWeek(),
+                            end_date: getToday(),
+                            page: 1,
+                          }))
+                        }
+                      >
+                        最近一周
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          setHistoryQuery(prev => ({
+                            ...prev,
+                            start_date: undefined,
+                            end_date: undefined,
+                            page: 1,
+                          }))
+                        }
+                      >
+                        清除
+                      </Button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </CardHeader>
@@ -513,10 +648,73 @@ export function Tasks() {
                 </div>
               ) : taskHistory && taskHistory.tasks.length > 0 ? (
                 <div className="space-y-4">
+                  {/* 批量操作工具栏 */}
+                  {selectedTasks.size > 0 && (
+                    <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg border">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-muted-foreground">
+                          已选择 {selectedTasks.size} 个任务
+                        </span>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setSelectedTasks(new Set());
+                            setSelectAll(false);
+                          }}
+                        >
+                          取消选择
+                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              disabled={batchDeleteMutation.isPending}
+                            >
+                              {batchDeleteMutation.isPending ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="mr-2 h-4 w-4" />
+                              )}
+                              批量删除
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>确认删除</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                您确定要删除选中的 {selectedTasks.size} 个任务历史记录吗？此操作无法撤销。
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>取消</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={handleBatchDelete}
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                              >
+                                确认删除
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="rounded-md border">
                     <table className="w-full">
                       <thead>
                         <tr className="border-b bg-muted/50">
+                          <th className="p-2 text-left text-sm w-12">
+                            <Checkbox
+                              checked={selectAll && taskHistory?.tasks.length > 0}
+                              onCheckedChange={handleSelectAll}
+                              aria-label="Select all tasks"
+                            />
+                          </th>
                           <th className="p-2 text-left text-sm">状态</th>
                           <th className="p-2 text-left text-sm">任务类型</th>
                           <th className="p-2 text-left text-sm">URL</th>
@@ -528,6 +726,15 @@ export function Tasks() {
                       <tbody>
                         {taskHistory.tasks.map((task) => (
                           <tr key={task.id} className="border-b">
+                            <td className="p-2">
+                              <Checkbox
+                                checked={selectedTasks.has(task.task_id)}
+                                onCheckedChange={(checked) =>
+                                  handleSelectTask(task.task_id, checked as boolean)
+                                }
+                                aria-label={`Select task ${task.task_id}`}
+                              />
+                            </td>
                             <td className="p-2">
                               <div className="flex items-center gap-2">
                                 {getStatusIcon(task.status)}

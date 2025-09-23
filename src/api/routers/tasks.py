@@ -348,19 +348,74 @@ async def cleanup_old_history(
     """清理旧的任务历史记录"""
     try:
         cutoff_date = datetime.now() - timedelta(days=days)
-        
+
         deleted_count = db.query(TaskHistory).filter(
             TaskHistory.created_at < cutoff_date
         ).delete()
-        
+
         db.commit()
-        
+
         return {
             "message": f"Deleted {deleted_count} task history records older than {days} days",
             "deleted_count": deleted_count
         }
-    
+
     except Exception as e:
         logger.error(f"Failed to cleanup old history: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class BatchDeleteRequest(BaseModel):
+    task_ids: List[str]
+
+
+@router.delete("/history/batch")
+async def delete_batch_task_history(
+    request: BatchDeleteRequest,
+    db: Session = Depends(get_db)
+):
+    """批量删除任务历史记录"""
+    try:
+        if not request.task_ids:
+            raise HTTPException(status_code=400, detail="No task IDs provided")
+
+        if len(request.task_ids) > 100:
+            raise HTTPException(status_code=400, detail="Too many task IDs (max 100)")
+
+        # 查找所有存在的任务
+        existing_tasks = db.query(TaskHistory).filter(
+            TaskHistory.task_id.in_(request.task_ids)
+        ).all()
+
+        if not existing_tasks:
+            raise HTTPException(status_code=404, detail="No matching tasks found")
+
+        existing_task_ids = [task.task_id for task in existing_tasks]
+        not_found_ids = [tid for tid in request.task_ids if tid not in existing_task_ids]
+
+        # 删除存在的任务
+        deleted_count = db.query(TaskHistory).filter(
+            TaskHistory.task_id.in_(existing_task_ids)
+        ).delete(synchronize_session=False)
+
+        db.commit()
+
+        response = {
+            "message": f"Successfully deleted {deleted_count} task history records",
+            "deleted_count": deleted_count,
+            "deleted_task_ids": existing_task_ids
+        }
+
+        if not_found_ids:
+            response["not_found_task_ids"] = not_found_ids
+            response["message"] += f", {len(not_found_ids)} tasks not found"
+
+        return response
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to delete batch task history: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
