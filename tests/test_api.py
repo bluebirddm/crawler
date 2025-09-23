@@ -1,6 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
 from src.api.main import app
+from src.api.routers.articles import ArticleCreate, ArticleUpdate
 
 
 client = TestClient(app)
@@ -30,6 +31,14 @@ class TestArticlesAPI:
         response = client.get("/api/articles/stats/daily?days=7")
         assert response.status_code == 200
         assert 'daily_stats' in response.json()
+
+    def test_article_models_normalize_blank_url(self):
+        create_payload = ArticleCreate(title="t", content="c", url="   ")
+        assert create_payload.url is None
+
+        update_payload = ArticleUpdate(url="\n")
+        dumped = update_payload.model_dump(exclude_unset=True)
+        assert dumped.get('url') is None
 
 
 class TestTasksAPI:

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime, timedelta
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from loguru import logger
 
 from ...models import get_db, Article
@@ -54,6 +54,19 @@ class ArticleCreate(BaseModel):
     keywords: Optional[List[str]] = None
     summary: Optional[str] = None
 
+    @field_validator("url", mode="before")
+    @classmethod
+    def normalize_url(cls, value: Optional[str]) -> Optional[str]:
+        """Return None for blank URLs so the DB unique index allows multiple missing values."""
+        if value is None:
+            return None
+        if isinstance(value, str):
+            stripped = value.strip()
+            if not stripped:
+                return None
+            return stripped
+        return value
+
 
 class ArticleUpdate(BaseModel):
     """更新文章的请求模型"""
@@ -69,6 +82,19 @@ class ArticleUpdate(BaseModel):
     level: Optional[int] = None
     keywords: Optional[List[str]] = None
     summary: Optional[str] = None
+
+    @field_validator("url", mode="before")
+    @classmethod
+    def normalize_url(cls, value: Optional[str]) -> Optional[str]:
+        """Treat blank strings as missing when updating URLs."""
+        if value is None:
+            return None
+        if isinstance(value, str):
+            stripped = value.strip()
+            if not stripped:
+                return None
+            return stripped
+        return value
 
 
 class ArticleFilter(BaseModel):
@@ -417,15 +443,16 @@ async def create_article(
 ):
     """创建新文章"""
     try:
+        normalized_url = article_data.url
         # 检查 URL 是否已存在（仅当提供了 URL 时）
-        if article_data.url:
-            existing_article = db.query(Article).filter(Article.url == article_data.url).first()
+        if normalized_url is not None:
+            existing_article = db.query(Article).filter(Article.url == normalized_url).first()
             if existing_article:
                 raise HTTPException(status_code=400, detail="Article with this URL already exists")
         
         # 创建新文章实例
         new_article = Article(
-            url=article_data.url,
+            url=normalized_url,
             title=article_data.title,
             content=article_data.content,
             author=article_data.author,
@@ -477,7 +504,7 @@ async def update_article(
         update_data = article_data.dict(exclude_unset=True)
         
         # 如果更新 URL，检查唯一性
-        if 'url' in update_data and update_data['url']:
+        if 'url' in update_data and update_data['url'] is not None:
             existing_article = db.query(Article).filter(
                 Article.url == update_data['url'],
                 Article.id != article_id
