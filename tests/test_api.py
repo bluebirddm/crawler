@@ -1,7 +1,9 @@
 import pytest
+from types import SimpleNamespace
 from fastapi.testclient import TestClient
 from src.api.main import app
 from src.api.routers.articles import ArticleCreate, ArticleUpdate
+from src.models import get_db, TaskHistory
 
 
 client = TestClient(app)
@@ -76,6 +78,67 @@ class TestTasksAPI:
         response = client.get("/api/tasks/scheduled")
         assert response.status_code == 200
         assert 'scheduled_tasks' in response.json()
+
+    def test_delete_batch_history_deletes_existing_ids(self):
+        deleted_payload = {"task_ids": ["existing-task"]}
+
+        class DummySession:
+            def __init__(self):
+                self.deleted_task_ids = []
+                self.committed = False
+                self.rolled_back = False
+
+            def query(self, model):
+                assert model is TaskHistory
+                return DummyQuery(self)
+
+            def commit(self):
+                self.committed = True
+
+            def rollback(self):
+                self.rolled_back = True
+
+            def close(self):
+                pass
+
+        class DummyQuery:
+            def __init__(self, session):
+                self.session = session
+                self.stage = getattr(session, 'stage', 0)
+
+            def filter(self, *_args, **_kwargs):
+                return self
+
+            def all(self):
+                self.session.stage = 1
+                return [SimpleNamespace(task_id="existing-task")]
+
+            def delete(self, synchronize_session=False):
+                assert synchronize_session is False
+                self.session.deleted_task_ids = ["existing-task"]
+                return len(self.session.deleted_task_ids)
+
+        def override_get_db():
+            session = DummySession()
+            try:
+                yield session
+            finally:
+                pass
+
+        app.dependency_overrides[get_db] = override_get_db
+
+        try:
+            response = client.delete(
+                "/api/tasks/history/batch",
+                json=deleted_payload
+            )
+        finally:
+            app.dependency_overrides.pop(get_db, None)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["deleted_count"] == 1
+        assert data["deleted_task_ids"] == ["existing-task"]
 
 
 class TestAdminAPI:

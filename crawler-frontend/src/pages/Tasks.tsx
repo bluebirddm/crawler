@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { tasksApi } from '@/api/tasks';
 import type { TaskHistoryQuery } from '@/api/tasks';
+import type { CheckedState } from '@radix-ui/react-checkbox';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -153,30 +154,56 @@ export function Tasks() {
     }
   };
 
-  const handleSelectAll = (checked: boolean) => {
-    setSelectAll(checked);
-    if (checked && taskHistory) {
-      const allTaskIds = new Set(taskHistory.tasks.map(task => task.task_id));
-      setSelectedTasks(allTaskIds);
+  const handleSelectAll = (checked: CheckedState) => {
+    const isChecked = checked === true;
+    setSelectAll(isChecked);
+
+    if (isChecked && taskHistory) {
+      const taskIds = taskHistory.tasks
+        .map(task => task.task_id)
+        .filter((id): id is string => Boolean(id));
+      setSelectedTasks(new Set(taskIds));
     } else {
       setSelectedTasks(new Set());
     }
   };
 
-  const handleSelectTask = (taskId: string, checked: boolean) => {
+  const handleSelectTask = (taskId: string, checked: CheckedState) => {
+    if (!taskId) {
+      return;
+    }
+    const isChecked = checked === true;
     const newSelected = new Set(selectedTasks);
-    if (checked) {
+    if (isChecked) {
       newSelected.add(taskId);
     } else {
       newSelected.delete(taskId);
       setSelectAll(false);
     }
     setSelectedTasks(newSelected);
+
+    if (isChecked && taskHistory && newSelected.size === taskHistory.tasks.length) {
+      setSelectAll(true);
+    }
   };
 
+  const selectedTaskIds = useMemo(() => Array.from(selectedTasks), [selectedTasks]);
+  const totalTasksOnPage = taskHistory?.tasks.length ?? 0;
+  const isIndeterminate =
+    totalTasksOnPage > 0 &&
+    selectedTaskIds.length > 0 &&
+    selectedTaskIds.length < totalTasksOnPage;
+  const selectAllChecked: CheckedState = totalTasksOnPage === 0
+    ? false
+    : selectAll
+    ? true
+    : isIndeterminate
+    ? 'indeterminate'
+    : false;
+
   const handleBatchDelete = () => {
-    if (selectedTasks.size > 0) {
-      batchDeleteMutation.mutate(Array.from(selectedTasks));
+    if (selectedTaskIds.length > 0) {
+      batchDeleteMutation.mutate(selectedTaskIds);
     }
   };
 
@@ -710,7 +737,7 @@ export function Tasks() {
                         <tr className="border-b bg-muted/50">
                           <th className="p-2 text-left text-sm w-12">
                             <Checkbox
-                              checked={selectAll && taskHistory?.tasks.length > 0}
+                              checked={selectAllChecked}
                               onCheckedChange={handleSelectAll}
                               aria-label="Select all tasks"
                             />
@@ -730,7 +757,7 @@ export function Tasks() {
                               <Checkbox
                                 checked={selectedTasks.has(task.task_id)}
                                 onCheckedChange={(checked) =>
-                                  handleSelectTask(task.task_id, checked as boolean)
+                                  handleSelectTask(task.task_id, checked)
                                 }
                                 aria-label={`Select task ${task.task_id}`}
                               />
