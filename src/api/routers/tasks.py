@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, BackgroundTasks, Query, Depends
 from pydantic import BaseModel, HttpUrl
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
+import math
 from sqlalchemy import desc, asc, and_, or_
 from sqlalchemy.orm import Session
 from loguru import logger
@@ -193,14 +194,51 @@ class BatchDeleteRequest(BaseModel):
     task_ids: List[str]
 
 
+def _parse_datetime_query_param(value: Optional[str], param_name: str) -> Optional[datetime]:
+    """支持 ISO 字符串或 Unix 时间戳（秒/毫秒）的查询参数解析"""
+    if value is None:
+        return None
+
+    if isinstance(value, str):
+        value = value.strip()
+
+    if not value:
+        return None
+
+    # 数值类型：支持秒或毫秒级时间戳（字符串形式）
+    try:
+        numeric_value = float(value)
+        if math.isfinite(numeric_value):
+            if abs(numeric_value) > 1e12:  # 13 位以上视为毫秒
+                numeric_value /= 1000.0
+            try:
+                return datetime.fromtimestamp(numeric_value)
+            except (OverflowError, OSError, ValueError):
+                raise HTTPException(status_code=400, detail=f"Invalid {param_name}: {value}")
+    except ValueError:
+        numeric_value = None
+
+    # ISO 字符串: 支持日期、日期时间及带时区
+    normalized_value = value.replace('Z', '+00:00') if isinstance(value, str) else value
+    try:
+        dt = datetime.fromisoformat(normalized_value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail=f"Invalid {param_name}: {value}")
+
+    if dt.tzinfo:
+        dt = dt.astimezone().replace(tzinfo=None)
+
+    return dt
+
+
 @router.get("/history", response_model=TaskHistoryResponse)
 async def get_task_history(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     status: Optional[str] = None,
     task_type: Optional[str] = None,
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
     sort_by: str = Query("created_at", pattern="^(created_at|completed_at|status|task_type)$"),
     order: str = Query("desc", pattern="^(asc|desc)$"),
     db: Session = Depends(get_db)
@@ -220,11 +258,14 @@ async def get_task_history(
         if task_type:
             query = query.filter(TaskHistory.task_type == task_type)
         
-        if start_date:
-            query = query.filter(TaskHistory.created_at >= start_date)
+        parsed_start = _parse_datetime_query_param(start_date, "start_date")
+        parsed_end = _parse_datetime_query_param(end_date, "end_date")
+
+        if parsed_start:
+            query = query.filter(TaskHistory.created_at >= parsed_start)
         
-        if end_date:
-            query = query.filter(TaskHistory.created_at <= end_date)
+        if parsed_end:
+            query = query.filter(TaskHistory.created_at <= parsed_end)
         
         # 获取总数
         total = query.count()

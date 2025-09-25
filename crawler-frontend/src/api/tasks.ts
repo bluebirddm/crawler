@@ -6,8 +6,8 @@ interface TaskHistoryQuery {
   page_size?: number;
   status?: string;
   task_type?: string;
-  start_date?: string;
-  end_date?: string;
+  start_date?: number;
+  end_date?: number;
   sort_by?: 'created_at' | 'completed_at' | 'status' | 'task_type';
   order?: 'asc' | 'desc';
 }

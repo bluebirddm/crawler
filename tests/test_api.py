@@ -1,4 +1,5 @@
 import pytest
+from datetime import datetime
 from types import SimpleNamespace
 from fastapi.testclient import TestClient
 from src.api.main import app
@@ -139,6 +140,76 @@ class TestTasksAPI:
         data = response.json()
         assert data["deleted_count"] == 1
         assert data["deleted_task_ids"] == ["existing-task"]
+
+    def test_get_task_history_supports_timestamp_filters(self):
+        class DummyQuery:
+            def __init__(self):
+                self.filters = []
+
+            def filter(self, condition):
+                self.filters.append(condition)
+                return self
+
+            def count(self):
+                return 0
+
+            def order_by(self, *_args, **_kwargs):
+                return self
+
+            def offset(self, *_args, **_kwargs):
+                return self
+
+            def limit(self, *_args, **_kwargs):
+                return self
+
+            def all(self):
+                return []
+
+        class DummySession:
+            def __init__(self):
+                self.query_instance = DummyQuery()
+
+            def query(self, model):
+                assert model is TaskHistory
+                return self.query_instance
+
+            def close(self):
+                pass
+
+        session_holder: dict[str, DummySession] = {}
+
+        def override_get_db():
+            session = DummySession()
+            session_holder['session'] = session
+            try:
+                yield session
+            finally:
+                pass
+
+        app.dependency_overrides[get_db] = override_get_db
+
+        try:
+            response = client.get(
+                "/api/tasks/history",
+                params={
+                    "start_date": "1757520000000",
+                    "end_date": "1757606400000",
+                },
+            )
+        finally:
+            app.dependency_overrides.pop(get_db, None)
+
+        assert response.status_code == 200
+        dummy_session = session_holder.get('session')
+        assert dummy_session is not None
+        filters = dummy_session.query_instance.filters
+        assert len(filters) == 2
+
+        filter_values = {f.right.value for f in filters}
+        expected_start = datetime.fromtimestamp(1757520000000 / 1000)
+        expected_end = datetime.fromtimestamp(1757606400000 / 1000)
+        assert expected_start in filter_values
+        assert expected_end in filter_values
 
 
 class TestAdminAPI:

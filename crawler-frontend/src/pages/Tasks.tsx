@@ -207,15 +207,50 @@ export function Tasks() {
     }
   };
 
-  const formatDateForInput = (date: Date) => {
-    return date.toISOString().split('T')[0];
+  const toSecondPrecision = (timestamp: number) => Math.floor(timestamp / 1000) * 1000;
+
+  const formatDateTimeForInput = (timestamp?: number) => {
+    if (timestamp === undefined) {
+      return '';
+    }
+
+    const date = new Date(toSecondPrecision(timestamp));
+    const pad = (value: number) => value.toString().padStart(2, '0');
+
+    const year = date.getFullYear();
+    const month = pad(date.getMonth() + 1);
+    const day = pad(date.getDate());
+    const hours = pad(date.getHours());
+    const minutes = pad(date.getMinutes());
+    const seconds = pad(date.getSeconds());
+
+    return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
   };
 
-  const getToday = () => formatDateForInput(new Date());
-  const getLastWeek = () => {
+  const parseDateTimeFromInput = (value: string): number | undefined => {
+    if (!value) {
+      return undefined;
+    }
+
+    const parsed = new Date(value);
+    const timestamp = parsed.getTime();
+    if (Number.isNaN(timestamp)) {
+      return undefined;
+    }
+
+    return toSecondPrecision(timestamp);
+  };
+
+  const getStartOfDay = (date: Date) => {
+    const start = new Date(date);
+    start.setHours(0, 0, 0, 0);
+    return toSecondPrecision(start.getTime());
+  };
+
+  const getDaysAgoStart = (days: number) => {
     const date = new Date();
-    date.setDate(date.getDate() - 7);
-    return formatDateForInput(date);
+    date.setDate(date.getDate() - days);
+    return getStartOfDay(date);
   };
 
   const getStatusIcon = (status: string) => {
@@ -609,13 +644,14 @@ export function Tasks() {
                     <Label htmlFor="start-date" className="text-sm">创建时间:</Label>
                     <Input
                       id="start-date"
-                      type="date"
-                      className="w-[150px]"
-                      value={historyQuery.start_date || ''}
+                      type="datetime-local"
+                      step={1}
+                      className="w-[220px]"
+                      value={formatDateTimeForInput(historyQuery.start_date)}
                       onChange={(e) =>
                         setHistoryQuery(prev => ({
                           ...prev,
-                          start_date: e.target.value || undefined,
+                          start_date: parseDateTimeFromInput(e.target.value),
                           page: 1,
                         }))
                       }
@@ -623,13 +659,14 @@ export function Tasks() {
                     <span className="text-muted-foreground">至</span>
                     <Input
                       id="end-date"
-                      type="date"
-                      className="w-[150px]"
-                      value={historyQuery.end_date || ''}
+                      type="datetime-local"
+                      step={1}
+                      className="w-[220px]"
+                      value={formatDateTimeForInput(historyQuery.end_date)}
                       onChange={(e) =>
                         setHistoryQuery(prev => ({
                           ...prev,
-                          end_date: e.target.value || undefined,
+                          end_date: parseDateTimeFromInput(e.target.value),
                           page: 1,
                         }))
                       }
@@ -641,8 +678,8 @@ export function Tasks() {
                         onClick={() =>
                           setHistoryQuery(prev => ({
                             ...prev,
-                            start_date: getLastWeek(),
-                            end_date: getToday(),
+                            start_date: getDaysAgoStart(7),
+                            end_date: toSecondPrecision(Date.now()),
                             page: 1,
                           }))
                         }
