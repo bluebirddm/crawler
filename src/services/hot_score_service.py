@@ -164,11 +164,23 @@ class HotScoreService:
         db: Session,
         limit: int = 10,
         category: Optional[str] = None,
-        time_range: Optional[str] = None
+        time_range: Optional[str] = None,
+        start_time: Optional[datetime] = None,
+        end_time: Optional[datetime] = None
     ) -> List[Article]:
         """获取热门文章列表（带缓存）"""
         # 构建缓存键
-        cache_key = f"hot_articles:limit:{limit}:category:{category or 'all'}:range:{time_range or 'all'}"
+        start_key = int(start_time.timestamp()) if start_time else "none"
+        end_key = int(end_time.timestamp()) if end_time else "none"
+        cache_key = (
+            "hot_articles:limit:{limit}:category:{category}:range:{time_range}:start:{start}:end:{end}".format(
+                limit=limit,
+                category=category or "all",
+                time_range=time_range or "all",
+                start=start_key,
+                end=end_key,
+            )
+        )
         
         # 尝试从缓存获取
         cached_data = cache.get(cache_key)
@@ -197,6 +209,11 @@ class HotScoreService:
                 }
                 if time_range in time_filters:
                     query = query.filter(Article.crawl_time >= time_filters[time_range])
+
+            if start_time is not None:
+                query = query.filter(Article.crawl_time >= start_time)
+            if end_time is not None:
+                query = query.filter(Article.crawl_time <= end_time)
             
             # 分类筛选
             if category:

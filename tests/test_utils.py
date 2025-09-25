@@ -1,4 +1,5 @@
 import pytest
+from datetime import datetime
 from src.utils.helpers import (
     clean_text,
     extract_domain,
@@ -11,6 +12,7 @@ from src.utils.helpers import (
     extract_chinese,
     is_chinese_text
 )
+from src.api.utils.datetime import parse_datetime_param
 
 
 class TestHelpers:
@@ -100,3 +102,17 @@ class TestHelpers:
         assert is_chinese_text("这是中文 with some English", threshold=0.3)
         assert not is_chinese_text("This is English text")
         assert not is_chinese_text("123456789")
+
+
+class TestApiDatetimeUtils:
+    def test_parse_datetime_param_supports_milliseconds(self):
+        dt = parse_datetime_param("1757520000000", "start_date")
+        assert dt == datetime.fromtimestamp(1757520000)
+
+    def test_parse_datetime_param_supports_iso(self):
+        dt = parse_datetime_param("2025-09-11T12:30:00", "start_date")
+        assert dt == datetime(2025, 9, 11, 12, 30, 0)
+
+    def test_parse_datetime_param_rejects_invalid(self):
+        with pytest.raises(ValueError):
+            parse_datetime_param("not-a-date", "start_date")

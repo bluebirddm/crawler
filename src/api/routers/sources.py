@@ -10,6 +10,7 @@ from urllib.parse import urlparse
 
 from ...models import get_db, CrawlerSource
 from ...tasks import crawl_url
+from ..utils.datetime import parse_datetime_param, apply_datetime_filters
 
 router = APIRouter()
 
@@ -50,6 +51,8 @@ class SourceResponse(BaseModel):
 async def get_sources(
     category: Optional[str] = Query(None, description="Filter by category"),
     enabled: Optional[bool] = Query(None, description="Filter by enabled status"),
+    start_date: Optional[str] = Query(None, description="Filter by creation start time"),
+    end_date: Optional[str] = Query(None, description="Filter by creation end time"),
     db: Session = Depends(get_db)
 ):
     """获取所有爬取源"""
@@ -60,6 +63,17 @@ async def get_sources(
             query = query.filter(CrawlerSource.category == category)
         if enabled is not None:
             query = query.filter(CrawlerSource.enabled == enabled)
+
+        try:
+            parsed_start = parse_datetime_param(start_date, "start_date")
+            parsed_end = parse_datetime_param(end_date, "end_date")
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
+        if parsed_start and parsed_end and parsed_start > parsed_end:
+            raise HTTPException(status_code=400, detail="start_date cannot be after end_date")
+
+        query = apply_datetime_filters(query, CrawlerSource.created_at, parsed_start, parsed_end)
         
         sources = query.order_by(desc(CrawlerSource.created_at)).all()
         

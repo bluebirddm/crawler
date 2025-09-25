@@ -4,7 +4,7 @@ from types import SimpleNamespace
 from fastapi.testclient import TestClient
 from src.api.main import app
 from src.api.routers.articles import ArticleCreate, ArticleUpdate
-from src.models import get_db, TaskHistory
+from src.models import get_db, TaskHistory, Article
 
 
 client = TestClient(app)
@@ -79,6 +79,74 @@ class TestTasksAPI:
         response = client.get("/api/tasks/scheduled")
         assert response.status_code == 200
         assert 'scheduled_tasks' in response.json()
+
+    def test_search_articles_applies_timestamp_filters(self):
+        class DummyQuery:
+            def __init__(self):
+                self.filters = []
+                self.offset_value = None
+                self.limit_value = None
+
+            def filter(self, *conditions):
+                self.filters.extend(conditions)
+                return self
+
+            def order_by(self, *_args, **_kwargs):
+                return self
+
+            def offset(self, value):
+                self.offset_value = value
+                return self
+
+            def limit(self, value):
+                self.limit_value = value
+                return self
+
+            def all(self):
+                return []
+
+        class DummySession:
+            def __init__(self):
+                self.query_instance = DummyQuery()
+
+            def query(self, model):
+                assert model is Article
+                return self.query_instance
+
+            def close(self):
+                pass
+
+        session_holder: dict[str, DummySession] = {}
+
+        def override_get_db():
+            session = DummySession()
+            session_holder['session'] = session
+            try:
+                yield session
+            finally:
+                pass
+
+        app.dependency_overrides[get_db] = override_get_db
+
+        try:
+            response = client.get(
+                "/api/articles/search/",
+                params={
+                    "start_date": "1757520000000",
+                    "end_date": "1757606400000",
+                },
+            )
+        finally:
+            app.dependency_overrides.pop(get_db, None)
+
+        assert response.status_code == 200
+        dummy_session = session_holder.get('session')
+        assert dummy_session is not None
+        filters = dummy_session.query_instance.filters
+        expected_start = datetime.fromtimestamp(1757520000000 / 1000)
+        expected_end = datetime.fromtimestamp(1757606400000 / 1000)
+        assert any(getattr(f.right, "value", None) == expected_start for f in filters)
+        assert any(getattr(f.right, "value", None) == expected_end for f in filters)
 
     def test_delete_batch_history_deletes_existing_ids(self):
         deleted_payload = {"task_ids": ["existing-task"]}

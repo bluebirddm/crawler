@@ -7,6 +7,7 @@ from loguru import logger
 
 from ...models import get_db, Article
 from ...services import HotScoreService
+from ..utils.datetime import parse_datetime_param, apply_datetime_filters
 
 router = APIRouter()
 
@@ -150,11 +151,13 @@ async def search_articles(
     level: Optional[int] = Query(None, description="文章级别"),
     skip: int = Query(0, ge=0),
     limit: int = Query(10, ge=1, le=100),
+    start_date: Optional[str] = Query(None, description="筛选开始时间，支持 epoch 秒/毫秒或 ISO 字符串"),
+    end_date: Optional[str] = Query(None, description="筛选结束时间，支持 epoch 秒/毫秒或 ISO 字符串"),
     db: Session = Depends(get_db)
 ):
     try:
         query = db.query(Article)
-        
+
         # 文本搜索条件
         if q:
             query = query.filter(
@@ -169,11 +172,22 @@ async def search_articles(
         # 级别筛选条件
         if level is not None:
             query = query.filter(Article.level == level)
-        
+
+        try:
+            parsed_start = parse_datetime_param(start_date, "start_date")
+            parsed_end = parse_datetime_param(end_date, "end_date")
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
+        if parsed_start and parsed_end and parsed_start > parsed_end:
+            raise HTTPException(status_code=400, detail="start_date cannot be after end_date")
+
+        query = apply_datetime_filters(query, Article.crawl_time, parsed_start, parsed_end)
+
         articles = query.order_by(Article.crawl_time.desc()).offset(skip).limit(limit).all()
-        
+
         return articles
-    
+
     except Exception as e:
         logger.error(f"Search failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -190,15 +204,30 @@ async def get_article(article_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/stats/categories")
-async def get_category_stats(db: Session = Depends(get_db)):
+async def get_category_stats(
+    start_date: Optional[str] = Query(None, description="筛选开始时间"),
+    end_date: Optional[str] = Query(None, description="筛选结束时间"),
+    db: Session = Depends(get_db)
+):
     try:
         from sqlalchemy import func
-        
-        stats = db.query(
+
+        try:
+            parsed_start = parse_datetime_param(start_date, "start_date")
+            parsed_end = parse_datetime_param(end_date, "end_date")
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
+        if parsed_start and parsed_end and parsed_start > parsed_end:
+            raise HTTPException(status_code=400, detail="start_date cannot be after end_date")
+
+        query = db.query(
             Article.category,
             func.count(Article.id).label('count')
-        ).group_by(Article.category).all()
-        
+        )
+        query = apply_datetime_filters(query, Article.crawl_time, parsed_start, parsed_end)
+        stats = query.group_by(Article.category).all()
+
         return {
             "categories": [
                 {"category": stat[0], "count": stat[1]} 
@@ -214,19 +243,32 @@ async def get_category_stats(db: Session = Depends(get_db)):
 @router.get("/stats/daily")
 async def get_daily_stats(
     days: int = Query(7, ge=1, le=30),
+    start_date: Optional[str] = Query(None, description="筛选开始时间"),
+    end_date: Optional[str] = Query(None, description="筛选结束时间"),
     db: Session = Depends(get_db)
 ):
     try:
         from sqlalchemy import func
         
-        start_date = datetime.now() - timedelta(days=days)
-        
-        stats = db.query(
+        now = datetime.now()
+        try:
+            parsed_start = parse_datetime_param(start_date, "start_date")
+            parsed_end = parse_datetime_param(end_date, "end_date")
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
+        range_end = parsed_end or now
+        range_start = parsed_start or (range_end - timedelta(days=days))
+
+        if range_start > range_end:
+            raise HTTPException(status_code=400, detail="start_date cannot be after end_date")
+
+        stats_query = db.query(
             func.date(Article.crawl_time).label('date'),
             func.count(Article.id).label('count')
-        ).filter(
-            Article.crawl_time >= start_date
-        ).group_by(
+        )
+        stats_query = apply_datetime_filters(stats_query, Article.crawl_time, range_start, range_end)
+        stats = stats_query.group_by(
             func.date(Article.crawl_time)
         ).order_by('date').all()
         
@@ -319,15 +361,28 @@ async def get_hot_articles(
     limit: int = Query(10, ge=1, le=50, description="返回数量"),
     category: Optional[str] = Query(None, description="文章分类"),
     time_range: Optional[str] = Query(None, pattern="^(1d|7d|30d|all)$", description="时间范围"),
+    start_date: Optional[str] = Query(None, description="筛选开始时间"),
+    end_date: Optional[str] = Query(None, description="筛选结束时间"),
     db: Session = Depends(get_db)
 ):
     """获取热门文章列表"""
     try:
+        try:
+            parsed_start = parse_datetime_param(start_date, "start_date")
+            parsed_end = parse_datetime_param(end_date, "end_date")
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
+        if parsed_start and parsed_end and parsed_start > parsed_end:
+            raise HTTPException(status_code=400, detail="start_date cannot be after end_date")
+
         articles = HotScoreService.get_hot_articles(
             db=db,
             limit=limit,
             category=category,
-            time_range=time_range
+            time_range=time_range,
+            start_time=parsed_start,
+            end_time=parsed_end
         )
         return articles
     

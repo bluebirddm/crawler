@@ -9,6 +9,7 @@ import json
 
 from ...models import get_db, Article
 from ...tasks.celery_app import app as celery_app
+from ..utils.datetime import parse_datetime_param, apply_datetime_filters
 
 router = APIRouter()
 
@@ -59,27 +60,45 @@ class TagStats(BaseModel):
 
 
 @router.get("/overview", response_model=StatsOverview)
-async def get_stats_overview(db: Session = Depends(get_db)):
+async def get_stats_overview(
+    start_date: Optional[str] = Query(None, description="筛选开始时间"),
+    end_date: Optional[str] = Query(None, description="筛选结束时间"),
+    db: Session = Depends(get_db)
+):
     try:
+        try:
+            parsed_start = parse_datetime_param(start_date, "start_date")
+            parsed_end = parse_datetime_param(end_date, "end_date")
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
+        if parsed_start and parsed_end and parsed_start > parsed_end:
+            raise HTTPException(status_code=400, detail="start_date cannot be after end_date")
+
+        def with_range(query):
+            return apply_datetime_filters(query, Article.crawl_time, parsed_start, parsed_end)
+
         # 总文章数
-        total_articles = db.query(func.count(Article.id)).scalar() or 0
+        total_articles = with_range(db.query(func.count(Article.id))).scalar() or 0
         
         # 今日文章数
         today = datetime.now().date()
-        today_articles = db.query(func.count(Article.id)).filter(
-            func.date(Article.crawl_time) == today
+        today_articles = with_range(
+            db.query(func.count(Article.id)).filter(func.date(Article.crawl_time) == today)
         ).scalar() or 0
         
         # 本周文章数（用于计算增长率）
         week_ago = datetime.now() - timedelta(days=7)
-        week_articles = db.query(func.count(Article.id)).filter(
-            Article.crawl_time >= week_ago
+        week_articles = with_range(
+            db.query(func.count(Article.id)).filter(Article.crawl_time >= week_ago)
         ).scalar() or 0
         
         # 上周文章数
         two_weeks_ago = datetime.now() - timedelta(days=14)
-        last_week_articles = db.query(func.count(Article.id)).filter(
-            and_(Article.crawl_time >= two_weeks_ago, Article.crawl_time < week_ago)
+        last_week_articles = with_range(
+            db.query(func.count(Article.id)).filter(
+                and_(Article.crawl_time >= two_weeks_ago, Article.crawl_time < week_ago)
+            )
         ).scalar() or 0
         
         # 计算周增长率
@@ -89,14 +108,16 @@ async def get_stats_overview(db: Session = Depends(get_db)):
         
         # 本月文章数
         month_ago = datetime.now() - timedelta(days=30)
-        month_articles = db.query(func.count(Article.id)).filter(
-            Article.crawl_time >= month_ago
+        month_articles = with_range(
+            db.query(func.count(Article.id)).filter(Article.crawl_time >= month_ago)
         ).scalar() or 0
-        
+
         # 上月文章数
         two_months_ago = datetime.now() - timedelta(days=60)
-        last_month_articles = db.query(func.count(Article.id)).filter(
-            and_(Article.crawl_time >= two_months_ago, Article.crawl_time < month_ago)
+        last_month_articles = with_range(
+            db.query(func.count(Article.id)).filter(
+                and_(Article.crawl_time >= two_months_ago, Article.crawl_time < month_ago)
+            )
         ).scalar() or 0
         
         # 计算月增长率
@@ -105,7 +126,9 @@ async def get_stats_overview(db: Session = Depends(get_db)):
             month_growth = round(((month_articles - last_month_articles) / last_month_articles) * 100, 2)
         
         # 获取爬取源数量（唯一域名数）
-        total_sources = db.query(func.count(distinct(Article.source_domain))).scalar() or 0
+        total_sources = with_range(
+            db.query(func.count(distinct(Article.source_domain)))
+        ).scalar() or 0
         
         # 获取 Celery 活跃 worker 数量
         active_workers = 0
@@ -137,18 +160,31 @@ async def get_stats_overview(db: Session = Depends(get_db)):
 @router.get("/daily", response_model=List[DailyStats])
 async def get_daily_stats(
     days: int = Query(7, ge=1, le=90),
+    start_date: Optional[str] = Query(None, description="筛选开始时间"),
+    end_date: Optional[str] = Query(None, description="筛选结束时间"),
     db: Session = Depends(get_db)
 ):
     try:
-        start_date = datetime.now() - timedelta(days=days)
+        now = datetime.now()
+        try:
+            parsed_start = parse_datetime_param(start_date, "start_date")
+            parsed_end = parse_datetime_param(end_date, "end_date")
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
+        range_end = parsed_end or now
+        range_start = parsed_start or (range_end - timedelta(days=days))
+
+        if range_start > range_end:
+            raise HTTPException(status_code=400, detail="start_date cannot be after end_date")
         
         # 获取每日文章统计
         daily_articles = db.query(
             func.date(Article.crawl_time).label('date'),
             func.count(Article.id).label('count')
-        ).filter(
-            Article.crawl_time >= start_date
-        ).group_by(
+        )
+        daily_articles = apply_datetime_filters(daily_articles, Article.crawl_time, range_start, range_end)
+        daily_articles = daily_articles.group_by(
             func.date(Article.crawl_time)
         ).all()
         
@@ -165,10 +201,10 @@ async def get_daily_stats(
         
         # 生成完整的日期范围
         result = []
-        current_date = start_date.date()
-        today = datetime.now().date()
+        current_date = range_start.date()
+        end_date_obj = range_end.date()
         
-        while current_date <= today:
+        while current_date <= end_date_obj:
             date_str = current_date.isoformat()
             if date_str in date_stats:
                 stats = date_stats[date_str]
@@ -198,15 +234,31 @@ async def get_daily_stats(
 
 
 @router.get("/categories", response_model=List[CategoryStats])
-async def get_category_stats(db: Session = Depends(get_db)):
+async def get_category_stats(
+    start_date: Optional[str] = Query(None, description="筛选开始时间"),
+    end_date: Optional[str] = Query(None, description="筛选结束时间"),
+    db: Session = Depends(get_db)
+):
     try:
+        try:
+            parsed_start = parse_datetime_param(start_date, "start_date")
+            parsed_end = parse_datetime_param(end_date, "end_date")
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
+        if parsed_start and parsed_end and parsed_start > parsed_end:
+            raise HTTPException(status_code=400, detail="start_date cannot be after end_date")
+
         # 获取所有分类统计
-        total_count = db.query(func.count(Article.id)).scalar() or 1
+        total_query = apply_datetime_filters(db.query(func.count(Article.id)), Article.crawl_time, parsed_start, parsed_end)
+        total_count = total_query.scalar() or 1
         
-        category_counts = db.query(
+        category_query = db.query(
             Article.category,
             func.count(Article.id).label('count')
-        ).group_by(Article.category).all()
+        )
+        category_query = apply_datetime_filters(category_query, Article.crawl_time, parsed_start, parsed_end)
+        category_counts = category_query.group_by(Article.category).all()
         
         result = []
         for stat in category_counts:
@@ -245,16 +297,31 @@ async def get_category_stats(db: Session = Depends(get_db)):
 
 
 @router.get("/sources", response_model=List[SourceStats])
-async def get_source_stats(db: Session = Depends(get_db)):
+async def get_source_stats(
+    start_date: Optional[str] = Query(None, description="筛选开始时间"),
+    end_date: Optional[str] = Query(None, description="筛选结束时间"),
+    db: Session = Depends(get_db)
+):
     try:
         today = datetime.now().date()
+
+        try:
+            parsed_start = parse_datetime_param(start_date, "start_date")
+            parsed_end = parse_datetime_param(end_date, "end_date")
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
+        if parsed_start and parsed_end and parsed_start > parsed_end:
+            raise HTTPException(status_code=400, detail="start_date cannot be after end_date")
         
         # 获取每个源的统计
-        source_stats = db.query(
+        source_query = db.query(
             Article.source_domain,
             func.count(Article.id).label('total'),
             func.sum(case((func.date(Article.crawl_time) == today, 1), else_=0)).label('today')
-        ).group_by(Article.source_domain).all()
+        )
+        source_query = apply_datetime_filters(source_query, Article.crawl_time, parsed_start, parsed_end)
+        source_stats = source_query.group_by(Article.source_domain).all()
         
         result = []
         for idx, stat in enumerate(source_stats):
@@ -287,11 +354,23 @@ async def get_source_stats(db: Session = Depends(get_db)):
 @router.get("/tags", response_model=List[TagStats])
 async def get_tag_stats(
     limit: int = Query(20, ge=1, le=100),
+    start_date: Optional[str] = Query(None, description="筛选开始时间"),
+    end_date: Optional[str] = Query(None, description="筛选结束时间"),
     db: Session = Depends(get_db)
 ):
     try:
+        try:
+            parsed_start = parse_datetime_param(start_date, "start_date")
+            parsed_end = parse_datetime_param(end_date, "end_date")
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
+        if parsed_start and parsed_end and parsed_start > parsed_end:
+            raise HTTPException(status_code=400, detail="start_date cannot be after end_date")
         # 获取所有文章的标签
-        articles_with_tags = db.query(Article.tags).filter(Article.tags != None).all()
+        articles_query = db.query(Article.tags).filter(Article.tags != None)
+        articles_query = apply_datetime_filters(articles_query, Article.crawl_time, parsed_start, parsed_end)
+        articles_with_tags = articles_query.all()
         
         # 统计标签频率
         tag_counts = {}

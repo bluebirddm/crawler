@@ -187,14 +187,18 @@ def invalidate_article_cache(article_id: Optional[int] = None):
 def get_hot_articles_cache_key(
     limit: int = 10,
     category: Optional[str] = None,
-    time_range: Optional[str] = None
+    time_range: Optional[str] = None,
+    start_time: Optional[int] = None,
+    end_time: Optional[int] = None
 ) -> str:
     """获取热门文章缓存键"""
     return cache_key_builder(
         "hot_articles",
         limit=limit,
         category=category,
-        time_range=time_range
+        time_range=time_range,
+        start=start_time,
+        end=end_time
     )
 
 
